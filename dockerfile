@@ -9,7 +9,7 @@ RUN echo init \
     && /app/.venv/bin/pip install --no-cache-dir "fastapi[standard]" \
     && rm /etc/nginx/http.d/default.conf \
     && mkdir -p /var/www/html \
-    && cp /app/nginx_conf/default /etc/nginx/http.d/default.conf \
+    && cp /app/nginx_conf/default.conf /etc/nginx/http.d/default.conf \
     && cp -r /app/html/* /var/www/html/ \
     && chown -R nginx:nginx /var/www/html
 WORKDIR /app
