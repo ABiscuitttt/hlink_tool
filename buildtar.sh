@@ -1,1 +1,1 @@
-tar -czvf linktool.tar.gz main.py html/ nginx_conf/
+tar -czvf linktool.tar.gz main.py init.sh html/ nginx_conf/

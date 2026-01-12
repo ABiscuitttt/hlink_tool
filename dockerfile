@@ -15,3 +15,4 @@ RUN echo init \
 WORKDIR /app
 EXPOSE 80
 ENTRYPOINT [ "/bin/ash" ]
+CMD [ "/app/init.sh" ]
