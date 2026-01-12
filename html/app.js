@@ -227,11 +227,11 @@ function updateStatus(message, type = 'info') {
 // 显示确认模态框
 function showConfirmModal() {
     if (selectedFile.size == 0) {
-        updateStatus('请先选择要复制的文件', 'error');
+        updateStatus('请先选择要链接的文件', 'error');
         return;
     }
 
-    confirmMessage.textContent = `确定要将 ${selectedFile.size} 个文件复制到目标目录 ${currentDstPath()} 中吗？`;
+    confirmMessage.textContent = `确定要将 ${selectedFile.size} 个文件链接到目标目录 ${currentDstPath()} 中吗？`;
     confirmModal.classList.add('active');
 }
 
@@ -241,7 +241,7 @@ function hideConfirmModal() {
 }
 
 
-// 执行复制操作
+// 执行链接操作
 async function performLink() {
     hideConfirmModal();
     updateStatus('正在创建硬链接...', 'loading');
