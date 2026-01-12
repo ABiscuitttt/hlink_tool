@@ -1,0 +1,1 @@
+tar -czvf linktool.tar.gz main.py html/ nginx_conf/

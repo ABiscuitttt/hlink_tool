@@ -1,0 +1,506 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* 与 header 渐变 ( #2C3539 → #4F4F4F ) 更协调的冷灰配色 */
+    --primary-color: #4B5563;
+    /* slate-600 */
+    --primary-hover: #374151;
+    /* gray-700 */
+    --success-color: #10b981;
+    /* 保持原绿色 */
+    --danger-color: #ef4444;
+    /* 保持原红色 */
+    --warning-color: #f59e0b;
+    /* 保持原橙色 */
+    --bg-color: #f3f4f6;
+    /* 更贴近整体浅灰背景 */
+    --border-color: #d1d5db;
+    /* 稍深的边框灰，提高层次感 */
+    --text-primary: #1f2937;
+    /* slate-800，增强对比 */
+    --text-secondary: #6b7280;
+    /* 保持次级文本灰 */
+    --transition: all 0.3s ease;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+}
+
+header {
+    padding: 20px 30px;
+    border-bottom: 2px solid var(--border-color);
+    background: linear-gradient(135deg, #2C3539 0%, #4F4F4F 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+header h1 {
+    font-size: 24px;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.panels-container {
+    display: flex;
+    flex: 1;
+    gap: 20px;
+    padding: 20px 30px;
+    overflow: hidden;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 16px 30px;
+    border-top: 1px solid var(--border-color);
+    background-color: #f8fafc;
+    box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.03);
+    flex-wrap: wrap;
+}
+
+.actions .panel-actions {
+    margin-left: auto;
+}
+
+.actions .buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.panel:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.panel-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: #f3f4f6;
+}
+
+.panel-header h2 {
+    font-size: 18px;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+}
+
+.path-display {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background-color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    word-break: break-all;
+    font-family: 'Courier New', monospace;
+}
+
+.file-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.file-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.file-list::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+.file-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.file-list::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 2px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+    border: 1px solid transparent;
+    background-color: #f9fafb;
+    user-select: none;
+}
+
+.file-item:hover {
+    background-color: #f0f4f8;
+    border-color: var(--border-color);
+}
+
+.file-item.selected {
+    background-color: #dbeafe;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.file-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.file-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-size {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    background-color: #e5e7eb;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.empty-directory {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    text-align: center;
+}
+
+.panel-actions {
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.filter-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.filter-control input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background-color: #ffffff;
+    display: inline-grid;
+    place-items: center;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+}
+
+.filter-control input[type="checkbox"]::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border: solid #ffffff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+    transition: var(--transition);
+}
+
+.filter-control input[type="checkbox"]:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+}
+
+.filter-control input[type="checkbox"]:checked::after {
+    opacity: 1;
+}
+
+.filter-control input[type="checkbox"]:focus-visible {
+    outline: 2px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 2px;
+}
+
+.filter-control label {
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.btn-secondary {
+    background-color: #e5e7eb;
+    color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+    background-color: #d1d5db;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.status-bar {
+    padding: 15px 30px;
+    background-color: #f3f4f6;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+}
+
+.status-message {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-left: 25px;
+    position: relative;
+}
+
+.status-message::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--status-color, var(--success-color));
+}
+
+/* 确认模态框样式（与整体风格统一） */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(17, 24, 39, 0.45);
+    /* 深色半透明，与整体更协调 */
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.modal {
+    background-color: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    width: 92%;
+    max-width: 480px;
+    overflow: hidden;
+    transform: translateY(8px) scale(0.98);
+    transition: transform 0.25s ease;
+}
+
+.modal-overlay.active .modal {
+    transform: translateY(0) scale(1);
+}
+
+.modal-header {
+    padding: 16px 18px;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-body {
+    padding: 18px;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.modal-message {
+    margin: 0 0 8px 0;
+    color: var(--text-secondary);
+    padding: inherit;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border-color);
+    background-color: #f9fafb;
+}
+
+.modal-actions .btn {
+    padding: 8px 14px;
+    font-size: 13px;
+    border-radius: 6px;
+    transition: var(--transition);
+}
+
+.modal-actions .btn-cancel {
+    background-color: #e5e7eb;
+    color: var(--text-primary);
+}
+
+.modal-actions .btn-cancel:hover {
+    background-color: #d1d5db;
+}
+
+.modal-actions .btn-confirm {
+    background-color: var(--primary-color);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.24);
+}
+
+.modal-actions .btn-confirm:hover {
+    background-color: var(--primary-hover);
+}
+
+.modal-actions .btn-confirm:focus-visible {
+    outline: 2px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 2px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .panels-container {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+    }
+
+    header {
+        padding: 15px 20px;
+    }
+
+    header h1 {
+        font-size: 20px;
+    }
+
+    .actions {
+        gap: 10px 12px;
+        /* row-gap column-gap */
+        padding: 12px 15px;
+    }
+
+    .actions .buttons {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .actions .panel-actions {
+        margin-left: 0;
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
