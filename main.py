@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 
-import tqdm
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,7 +11,7 @@ app = FastAPI(root_path="/api")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,  # 允许携带凭证（如Cookie）
+    allow_credentials=True,  # 允许携带凭证
     allow_methods=["*"],  # 允许所有HTTP方法
     allow_headers=["*"],  # 允许所有请求头
 )
@@ -139,7 +138,7 @@ def file_info(item: Path) -> dict:
 
 def format_file_size(bytes_num, decimal_places=2):
     """
-    将字节数转换为人类友好的文件大小字符串
+    将字节数转换为可读性好的文件大小字符串
 
     参数:
     bytes_num (int): 字节数
