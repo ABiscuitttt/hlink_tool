@@ -187,10 +187,10 @@ def link_full_path(src: Path, dst: Path):
 
     file_list = list([i for i in src.rglob("*") if i.is_file()])
     total_files = len(file_list)
-
+    folder_name = src.name
     for index, item in enumerate(file_list):
         relative_path = item.relative_to(src)
-        target_path = dst / relative_path
+        target_path = dst / folder_name / relative_path
         target_path.parent.mkdir(parents=True, exist_ok=True)
         if target_path.exists():
             target_path.unlink()
