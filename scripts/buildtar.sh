@@ -1,0 +1,1 @@
+tar -czvf hlink_tool.tar.gz main.py scripts/* html/ nginx_conf/
