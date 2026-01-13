@@ -17,20 +17,6 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-def root():
-    """根路径，返回API信息"""
-    return {
-        "message": "Directory Listing API",
-        "version": "1.0.0",
-        "endpoints": {
-            "list_dir_get": "GET /list-dir?path=your_path",
-            "list_dir_post": "POST /list-dir",
-            "check_path": "GET /check-path?path=your_path",
-        },
-    }
-
-
 @app.get("/list_dir")
 def listdir(path: str):
     path: Path = Path(path).absolute()
@@ -40,7 +26,7 @@ def listdir(path: str):
     if not path.is_dir():
         raise HTTPException(
             status_code=400, detail=f"{path} is not a directory")
-    
+
     di = dir_info(path)
     if path.parent != path:
         di.append(
