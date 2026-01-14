@@ -1,5 +1,5 @@
 FROM alpine
-ADD linktool.tar.gz /app/
+ADD hlink_tool.tar.gz /app/
 RUN echo init \
     && sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsinghua.edu.cn/alpine#g' /etc/apk/repositories \
     && apk update \
