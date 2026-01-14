@@ -18,8 +18,20 @@
             <!-- 左侧面板 -->
             <div class="panel">
                 <div class="panel-header">
-                    <h2>源目录</h2>
-                    <div class="path-display" id="src-path" type="src">/</div>
+                    <div class="panel-header-flex">
+                        <h2>源目录</h2>
+                        <input class="path-display-input" id="src-path" type="text" data-type="src" value="/"
+                            title="回车切换目录" autocomplete="off" />
+                        <button class="btn btn-folder" id="src-new-folder-btn" title="新建文件夹">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                viewBox="0 0 16 16">
+                                <path
+                                    d="M9.828 4a.5.5 0 0 1 .354.146l.646.647H14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h4.172a.5.5 0 0 1 .354.146l1.646 1.647H14a2 2 0 0 1 2 2v1a.5.5 0 0 1-1 0V4a1 1 0 0 0-1-1H9.828z" />
+                                <path
+                                    d="M8 10.5a.5.5 0 0 1 .5-.5h1.5V8.5a.5.5 0 0 1 1 0v1.5h1.5a.5.5 0 0 1 0 1H11V12.5a.5.5 0 0 1-1 0V11.5H8.5a.5.5 0 0 1-.5-.5z" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="file-list" id="src-list">
                     <div class="loading">
@@ -32,8 +44,20 @@
             <!-- 右侧面板 -->
             <div class="panel">
                 <div class="panel-header">
-                    <h2>目标目录</h2>
-                    <div class="path-display" id="dst-path" type="dst">/</div>
+                    <div class="panel-header-flex">
+                        <h2>目标目录</h2>
+                        <input class="path-display-input" id="dst-path" type="text" data-type="dst" value="/"
+                            title="回车切换目录" autocomplete="off" />
+                        <button class="btn btn-folder" id="dst-new-folder-btn" title="新建文件夹">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
+                                viewBox="0 0 16 16">
+                                <path
+                                    d="M9.828 4a.5.5 0 0 1 .354.146l.646.647H14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h4.172a.5.5 0 0 1 .354.146l1.646 1.647H14a2 2 0 0 1 2 2v1a.5.5 0 0 1-1 0V4a1 1 0 0 0-1-1H9.828z" />
+                                <path
+                                    d="M8 10.5a.5.5 0 0 1 .5-.5h1.5V8.5a.5.5 0 0 1 1 0v1.5h1.5a.5.5 0 0 1 0 1H11V12.5a.5.5 0 0 1-1 0V11.5H8.5a.5.5 0 0 1-.5-.5z" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="file-list" id="dst-list">
                     <div class="loading">
@@ -91,6 +115,22 @@
                 <div class="modal-actions">
                     <button class="btn btn-cancel" id="cancel-btn">取消</button>
                     <button class="btn btn-confirm" id="confirm-btn">确认链接</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 输入新文件夹名模态框 -->
+    <div class="modal-overlay" id="new-folder-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>新建文件夹</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-message" id="new-folder-message"></p>
+                <div class="modal-actions">
+                    <button class="btn btn-cancel" id="new-folder-cancel-btn">取消</button>
+                    <button class="btn btn-confirm" id="new-folder-confirm-btn">确认</button>
                 </div>
             </div>
         </div>
