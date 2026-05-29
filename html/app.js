@@ -138,7 +138,7 @@ async function createNewFolder(currentPath, folderName, type, listElement) {
     try {
         const response = await fetch(
             `/api/create_dir?path=${encodeURIComponent(currentPath)}&name=${encodeURIComponent(folderName)}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+            { method: 'GET', headers: { 'Content-Type': 'application/json' } }
         );
 
         if (!response.ok) {

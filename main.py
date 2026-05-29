@@ -3,11 +3,17 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
-router = APIRouter(prefix="/api")
+app = FastAPI(root_path="/api")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 logger = logging.getLogger("uvicorn")
 handler = logging.handlers.RotatingFileHandler(
@@ -37,7 +43,7 @@ def _check_path(path: Path) -> Path:
     return resolved
 
 
-@router.get("/list_dir")
+@app.get("/list_dir")
 def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
     path = _check_path(path)
     if not path.is_dir():
@@ -79,7 +85,7 @@ def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
     return results
 
 
-@router.get("/dir_size")
+@app.get("/dir_size")
 def directory_size(path: Path) -> str:
     path = _check_path(path)
     if not path.is_dir():
@@ -101,7 +107,7 @@ def directory_size(path: Path) -> str:
     return format_file_size(total_size)
 
 
-@router.post("/create_dir")
+@app.get("/create_dir")
 def create_dir(path: Path, name: str):
     path = _check_path(path)
     new_folder_path = path / name
@@ -121,12 +127,12 @@ def create_dir(path: Path, name: str):
         raise HTTPException(status_code=500, detail="创建文件夹失败")  # noqa: B904
 
 
-@router.get("/default_dir")
+@app.get("/default_dir")
 def default_dir():
     return {"dir": os.environ.get("DEFAULT_DIR", "/data")}
 
 
-@router.websocket("/ws/link_files")
+@app.websocket("/ws/link_files")
 async def websocket_progress(websocket: WebSocket):
     await websocket.accept()
 
@@ -257,14 +263,4 @@ def contains_single_link_file(path: Path) -> bool:
     return False
 
 
-# ===================== 主应用 =====================
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.include_router(router)
-app.mount("/", StaticFiles(directory="html", html=True), name="static")
+
