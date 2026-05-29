@@ -1,0 +1,14 @@
+[project]
+name = "hlink-tool"
+version = "1.0.0"
+description = "文件硬链接管理 Web 工具"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+]
+
+[project.scripts]
+hlink-tool = ""
+
+[tool.uv]
+index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"

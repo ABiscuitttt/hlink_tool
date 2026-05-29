@@ -3,17 +3,11 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(root_path="/api")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,  # 允许携带凭证
-    allow_methods=["*"],  # 允许所有HTTP方法
-    allow_headers=["*"],  # 允许所有请求头
-)
+router = APIRouter(prefix="/api")
 
 logger = logging.getLogger("uvicorn")
 handler = logging.handlers.RotatingFileHandler(
@@ -22,13 +16,30 @@ handler = logging.handlers.RotatingFileHandler(
 handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
 logger.addHandler(handler)
 
+# 路径安全：解析允许的根目录列表
+_ALLOWED_ROOTS_RAW = os.environ.get("ALLOWED_ROOTS", "")
+_ALLOWED_ROOTS = (
+    [Path(p).resolve() for p in _ALLOWED_ROOTS_RAW.split(",") if p.strip()]
+    if _ALLOWED_ROOTS_RAW.strip()
+    else None  # None 表示不限制（向后兼容）
+)
 
-@app.get("/list_dir")
-def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
-    path = path.absolute()
-    if not path.exists():
-        logger.warning("请求的路径不存在: %s", path)
+
+def _check_path(path: Path) -> Path:
+    """验证并规范化路径，若设置了 ALLOWED_ROOTS 则检查路径是否在允许范围内。"""
+    resolved = path.resolve()
+    if not resolved.exists():
         raise HTTPException(status_code=400, detail=f"请求的路径不存在: {path}")
+    if _ALLOWED_ROOTS is not None and not any(
+        resolved.is_relative_to(root) for root in _ALLOWED_ROOTS
+    ):
+        raise HTTPException(status_code=403, detail=f"禁止访问此路径: {path}")
+    return resolved
+
+
+@router.get("/list_dir")
+def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
+    path = _check_path(path)
     if not path.is_dir():
         logger.warning("请求的路径不是目录: %s", path)
         raise HTTPException(status_code=400, detail=f"请求的路径不是目录: {path}")
@@ -44,9 +55,9 @@ def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
                     or (item.is_dir() and contains_single_link_file(item))
                 )
                 if condition:
-                    results.append(file_info(item))
+                    results.append(file_info(item, stat_info))
             else:
-                results.append(file_info(item))
+                results.append(file_info(item, stat_info))
         except Exception as e:
             logger.error("处理项目 %s 时出错: %s", item, e)
 
@@ -57,6 +68,7 @@ def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
                 "type": "directory",
                 "path": path.parent.absolute().as_posix(),
                 "size": "--",
+                "isParent": True,
             }
         )
 
@@ -67,12 +79,9 @@ def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
     return results
 
 
-@app.get("/dir_size")
+@router.get("/dir_size")
 def directory_size(path: Path) -> str:
-    path = path.absolute()
-    if not path.exists():
-        logger.warning("请求的路径不存在: %s", path)
-        raise HTTPException(status_code=400, detail=f"请求的路径不存在: {path}")
+    path = _check_path(path)
     if not path.is_dir():
         logger.warning("请求的路径不是目录: %s", path)
         raise HTTPException(status_code=400, detail=f"请求的路径不是目录: {path}")
@@ -92,8 +101,9 @@ def directory_size(path: Path) -> str:
     return format_file_size(total_size)
 
 
-@app.get("/create_dir")
+@router.post("/create_dir")
 def create_dir(path: Path, name: str):
+    path = _check_path(path)
     new_folder_path = path / name
 
     # 检查名字是否合法
@@ -111,12 +121,12 @@ def create_dir(path: Path, name: str):
         raise HTTPException(status_code=500, detail="创建文件夹失败")  # noqa: B904
 
 
-@app.get("/default_dir")
+@router.get("/default_dir")
 def default_dir():
     return {"dir": os.environ.get("DEFAULT_DIR", "/data")}
 
 
-@app.websocket("/ws/link_files")
+@router.websocket("/ws/link_files")
 async def websocket_progress(websocket: WebSocket):
     await websocket.accept()
 
@@ -138,7 +148,9 @@ async def websocket_progress(websocket: WebSocket):
                 continue
 
             if src_path.is_file():
-                await websocket.send_text(f"正在处理 ({index}/{len(src_files)}) 链接 {src_path}...")
+                await websocket.send_text(
+                    f"正在处理 ({index}/{len(src_files)}) 链接 {src_path}..."
+                )
                 dst_file = dst_path / src_path.name
                 try:
                     if dst_file.exists():
@@ -195,10 +207,11 @@ async def link_full_path_async(src: Path, dst: Path):
             logger.error("链接文件 %s 到 %s 时出错: %s", item, target_path, e)
 
 
-def file_info(item: Path) -> dict:
-    info = os.stat(item)
+def file_info(item: Path, stat_info: os.stat_result | None = None) -> dict:
+    if stat_info is None:
+        stat_info = os.stat(item)
     item_type = "directory" if item.is_dir() else "file"
-    item_size = "--" if item.is_dir() else format_file_size(info.st_size)
+    item_size = "--" if item.is_dir() else format_file_size(stat_info.st_size)
     return {
         "name": item.name,
         "type": item_type,
@@ -244,36 +257,14 @@ def contains_single_link_file(path: Path) -> bool:
     return False
 
 
-def link_full_path(src: Path, dst: Path):
-    if not src.is_dir():
-        raise HTTPException(status_code=400, detail=f"{src} 不是有效的目录")
-    if not dst.is_dir():
-        raise HTTPException(status_code=400, detail=f"{dst} 不是有效的目录")
-
-    src = src.resolve()
-    dst = dst.resolve()
-
-    total_files = sum(
-        1 for _ in filter(lambda item: item.is_file(), src.rglob("*"))
-    )  # 计算总文件数
-    file_list = (item for item in src.rglob("*") if item.is_file())
-    folder_name = src.name
-
-    for index, item in enumerate(file_list, start=1):
-        try:
-            relative_path = item.relative_to(src)
-            target_path = dst / folder_name / relative_path
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-
-            if target_path.exists():
-                target_path.unlink()  # 删除已存在的目标文件
-
-            os.link(item, target_path)  # 创建硬链接
-            yield {
-                "current": index,
-                "total": total_files,
-                "source": item.as_posix(),
-                "target": target_path.as_posix(),
-            }
-        except Exception as e:
-            logger.error("链接文件 %s 到 %s 时出错: %s", item, target_path, e)
+# ===================== 主应用 =====================
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(router)
+app.mount("/", StaticFiles(directory="html", html=True), name="static")
