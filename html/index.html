@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文件操作工具</title>
+    <title>文件硬链接工具</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -12,23 +12,24 @@
     <div class="container">
         <header>
             <h1>文件硬链接工具</h1>
+            <p class="header-subtitle">双面板浏览 · WebSocket 实时创建硬链接</p>
         </header>
 
         <div class="panels-container">
-            <!-- 左侧面板 -->
+            <!-- 左侧：源目录面板 -->
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-header-flex">
                         <h2>源目录</h2>
                         <input class="path-display-input" id="src-path" type="text" data-type="src" value="/"
-                            title="回车切换目录" autocomplete="off" />
+                            title="回车切换目录" autocomplete="off" spellcheck="false" />
                         <button class="btn btn-folder" id="src-new-folder-btn" title="新建文件夹">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                viewBox="0 0 16 16">
-                                <path
-                                    d="M9.828 4a.5.5 0 0 1 .354.146l.646.647H14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h4.172a.5.5 0 0 1 .354.146l1.646 1.647H14a2 2 0 0 1 2 2v1a.5.5 0 0 1-1 0V4a1 1 0 0 0-1-1H9.828z" />
-                                <path
-                                    d="M8 10.5a.5.5 0 0 1 .5-.5h1.5V8.5a.5.5 0 0 1 1 0v1.5h1.5a.5.5 0 0 1 0 1H11V12.5a.5.5 0 0 1-1 0V11.5H8.5a.5.5 0 0 1-.5-.5z" />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+                                <path d="M12 11v6" />
+                                <path d="M9 14h6" />
                             </svg>
                         </button>
                     </div>
@@ -41,20 +42,20 @@
                 </div>
             </div>
 
-            <!-- 右侧面板 -->
+            <!-- 右侧：目标目录面板 -->
             <div class="panel">
                 <div class="panel-header">
                     <div class="panel-header-flex">
                         <h2>目标目录</h2>
                         <input class="path-display-input" id="dst-path" type="text" data-type="dst" value="/"
-                            title="回车切换目录" autocomplete="off" />
+                            title="回车切换目录" autocomplete="off" spellcheck="false" />
                         <button class="btn btn-folder" id="dst-new-folder-btn" title="新建文件夹">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                viewBox="0 0 16 16">
-                                <path
-                                    d="M9.828 4a.5.5 0 0 1 .354.146l.646.647H14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h4.172a.5.5 0 0 1 .354.146l1.646 1.647H14a2 2 0 0 1 2 2v1a.5.5 0 0 1-1 0V4a1 1 0 0 0-1-1H9.828z" />
-                                <path
-                                    d="M8 10.5a.5.5 0 0 1 .5-.5h1.5V8.5a.5.5 0 0 1 1 0v1.5h1.5a.5.5 0 0 1 0 1H11V12.5a.5.5 0 0 1-1 0V11.5H8.5a.5.5 0 0 1-.5-.5z" />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+                                <path d="M12 11v6" />
+                                <path d="M9 14h6" />
                             </svg>
                         </button>
                     </div>
@@ -67,44 +68,42 @@
                 </div>
             </div>
         </div>
+
         <div class="actions">
             <div class="buttons">
                 <button class="btn btn-secondary" id="refresh-btn">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        viewBox="0 0 16 16">
-                        <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" />
-                        <path
-                            d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                        <path d="M21 3v6h-6" />
                     </svg>
-                    刷新目录
+                    <span>刷新目录</span>
                 </button>
-                <button class="btn btn-secondary" id="link-btn">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        viewBox="0 0 16 16">
-                        <path
-                            d="M6.354 5.5H4a2.5 2.5 0 0 0 0 5h2.354a.5.5 0 0 0 0-1H4a1.5 1.5 0 0 1 0-3h2.354a.5.5 0 0 0 0-1z" />
-                        <path
-                            d="M9.646 5.5H12a2.5 2.5 0 0 1 0 5H9.646a.5.5 0 0 1 0-1H12a1.5 1.5 0 0 0 0-3H9.646a.5.5 0 0 1 0-1z" />
-                        <path d="M8 6.5a.5.5 0 0 1 .5.5v2.5a.5.5 0 0 1-1 0V7a.5.5 0 0 1 .5-.5z" />
+                <button class="btn btn-primary" id="link-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                     </svg>
-                    创建硬链接
+                    <span>创建硬链接</span>
                 </button>
             </div>
 
             <div class="panel-actions">
                 <div class="filter-control">
                     <input type="checkbox" id="filter-src" name="filter-src" />
-                    <label for="filter-src">筛选模式(只显示链接为1的文件/文件夹)</label>
+                    <label for="filter-src">仅显示链接数为 1 的文件/文件夹</label>
                 </div>
             </div>
-
         </div>
+
         <div class="status-bar">
             <div class="status-message" id="status-message">正在加载文件列表</div>
+            <div class="kbd-hints">Ctrl+L 链接 · Ctrl 多选 · Esc 取消选择</div>
         </div>
     </div>
 
-    <!-- 确认模态框 -->
+    <!-- 确认链接模态框 -->
     <div class="modal-overlay" id="confirm-modal">
         <div class="modal">
             <div class="modal-header">
@@ -113,29 +112,30 @@
             <div class="modal-body">
                 <p class="modal-message" id="confirm-message"></p>
                 <div class="modal-actions">
-                    <button class="btn btn-cancel" id="cancel-btn">取消</button>
-                    <button class="btn btn-confirm" id="confirm-btn">确认链接</button>
+                    <button class="btn btn-secondary" id="cancel-btn">取消</button>
+                    <button class="btn btn-primary" id="confirm-btn">确认链接</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 输入新文件夹名模态框 -->
+    <!-- 新建文件夹模态框 -->
     <div class="modal-overlay" id="new-folder-modal">
         <div class="modal">
             <div class="modal-header">
                 <h3>新建文件夹</h3>
             </div>
             <div class="modal-body">
-                <p class="modal-message" id="new-folder-message"></p>
+                <p class="modal-message" id="new-folder-message">请输入新文件夹名称：</p>
+                <input type="text" id="new-folder-input" class="folder-input" placeholder="文件夹名称" autocomplete="off"
+                    spellcheck="false" />
                 <div class="modal-actions">
-                    <button class="btn btn-cancel" id="new-folder-cancel-btn">取消</button>
-                    <button class="btn btn-confirm" id="new-folder-confirm-btn">确认</button>
+                    <button class="btn btn-secondary" id="new-folder-cancel-btn">取消</button>
+                    <button class="btn btn-primary" id="new-folder-confirm-btn">确认</button>
                 </div>
             </div>
         </div>
     </div>
-
 
     <script src="app.js"></script>
 </body>

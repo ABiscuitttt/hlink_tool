@@ -27,7 +27,10 @@
 - **无测试**: 当前项目不包含自动化测试
 - **日志**: 使用 `logging.handlers.RotatingFileHandler`，输出到 `app.log`（100KB 轮转，保留 3 个备份）
 - **中文 UI**: 前端界面为中文
-- **路径安全**: 通过 `ALLOWED_ROOTS` 环境变量限制可浏览的根目录（逗号分隔），不设置则向后兼容不限制
+- **路径安全**: 通过 `ALLOWED_ROOTS` 环境变量限制可浏览的根目录（逗号分隔），不设置则向后兼容不限制；REST 端点与 WebSocket 链接操作统一走 `_check_path` 校验
+- **CORS**: 通过 `ALLOWED_ORIGINS` 环境变量配置（逗号分隔），缺省 `*`（此时 `allow_credentials=False`）
+- **API 约定**: `create_dir` 为 POST（JSON body `{path, name}`）；`/ws/link_files` 使用结构化 JSON 帧（info/progress/skip/error/done）
+- **链接防护**: 源与目标相同时跳过（防止误删源文件）；目标在源目录内部时跳过（防止自嵌套）
 
 ## 常用命令
 

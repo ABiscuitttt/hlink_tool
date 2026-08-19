@@ -1,16 +1,38 @@
+"""hlink-tool 后端服务。
+
+基于 FastAPI 的文件硬链接管理 Web 工具（仅支持 Linux，使用 os.link() 创建硬链接）。
+通过 Nginx 反向代理对外提供服务，root_path 为 /api。
+
+路径安全：设置环境变量 ALLOWED_ROOTS（逗号分隔）后，所有文件操作路径
+必须位于允许的根目录之内。
+"""
+
 import asyncio
+import errno
 import logging
+import logging.handlers  # 显式导入，RotatingFileHandler 在此子模块中
 import os
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 app = FastAPI(root_path="/api")
+
+# CORS：从环境变量 ALLOWED_ORIGINS（逗号分隔）读取允许的来源。
+# 缺省为 ["*"]，但 "*" 与 allow_credentials=True 是非法组合，此时关闭凭证。
+_ALLOWED_ORIGINS_RAW = os.environ.get("ALLOWED_ORIGINS", "").strip()
+_allow_origins = (
+    [origin.strip() for origin in _ALLOWED_ORIGINS_RAW.split(",") if origin.strip()]
+    if _ALLOWED_ORIGINS_RAW
+    else ["*"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allow_origins,
+    allow_credentials=_allow_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -43,8 +65,16 @@ def _check_path(path: Path) -> Path:
     return resolved
 
 
+class CreateDirRequest(BaseModel):
+    """创建文件夹请求体。"""
+
+    path: Path  # 父目录绝对路径
+    name: str  # 新文件夹名称
+
+
 @app.get("/list_dir")
 def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
+    """列出目录内容，目录在前、文件在后，名称排序大小写不敏感。"""
     path = _check_path(path)
     if not path.is_dir():
         logger.warning("请求的路径不是目录: %s", path)
@@ -78,15 +108,13 @@ def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
             }
         )
 
-    def sort_key(item):
-        return item["type"], item["name"]
-
-    results.sort(key=sort_key)
+    results.sort(key=lambda item: (item["type"], item["name"].lower()))
     return results
 
 
 @app.get("/dir_size")
 def directory_size(path: Path) -> str:
+    """统计目录总大小（跳过符号链接），整体异常时返回 "未知"。"""
     path = _check_path(path)
     if not path.is_dir():
         logger.warning("请求的路径不是目录: %s", path)
@@ -103,17 +131,19 @@ def directory_size(path: Path) -> str:
                     logger.error("获取文件大小时出错 %s: %s", item, e)
     except Exception as e:
         logger.error("遍历目录时出错 %s: %s", path, e)
+        return "未知"
 
     return format_file_size(total_size)
 
 
-@app.get("/create_dir")
-def create_dir(path: Path, name: str):
-    path = _check_path(path)
-    new_folder_path = path / name
+@app.post("/create_dir")
+def create_dir(req: CreateDirRequest) -> dict:
+    """在指定目录下创建新文件夹。"""
+    path = _check_path(req.path)
+    new_folder_path = path / req.name
 
     # 检查名字是否合法
-    if any(char in name for char in r'\/:*?"<>|'):
+    if any(char in req.name for char in r'\/:*?"<>|'):
         raise HTTPException(status_code=400, detail="文件夹名称包含非法字符")
 
     try:
@@ -128,105 +158,283 @@ def create_dir(path: Path, name: str):
 
 
 @app.get("/default_dir")
-def default_dir():
+def default_dir() -> dict:
+    """返回默认目录（环境变量 DEFAULT_DIR，缺省 /data）。"""
     return {"dir": os.environ.get("DEFAULT_DIR", "/data")}
 
 
+def _link_error_message(e: OSError) -> str:
+    """将 os.link 的异常转换为友好的中文错误信息。"""
+    if e.errno == errno.EXDEV:
+        return "源文件与目标路径不在同一文件系统（跨设备），无法创建硬链接"
+    if isinstance(e, PermissionError) or e.errno in (errno.EACCES, errno.EPERM):
+        return "权限不足，无法创建硬链接"
+    return f"创建硬链接失败: {e}"
+
+
+async def _ws_send_error_and_close(websocket: WebSocket, message: str) -> None:
+    """发送错误帧并优雅关闭 WebSocket 连接。"""
+    try:
+        await websocket.send_json({"type": "error", "message": message})
+        await websocket.close()
+    except Exception:
+        logger.debug("发送错误消息或关闭连接失败，客户端可能已断开")
+
+
 @app.websocket("/ws/link_files")
-async def websocket_progress(websocket: WebSocket):
+async def websocket_progress(websocket: WebSocket) -> None:
+    """通过 WebSocket 执行硬链接任务，持续发送结构化 JSON 帧。
+
+    客户端首条消息格式：{"link": true, "src_files": [...], "dst_path": "..."}
+    服务端发送 info/progress/skip/error/done 帧，done 为最后一条，随后关闭连接。
+    """
     await websocket.accept()
 
     try:
-        while True:
-            data: dict = await websocket.receive_json()
-            if data.get("link"):
-                break
+        data = await websocket.receive_json()
 
-        src_files = [Path(src) for src in data.get("src_files", [])]
-        dst_path = Path(data.get("dst_path", ""))
-        if not dst_path.is_dir():
-            await websocket.send_text("目标路径不是有效的目录")
+        # 校验首条消息：必须含 link: true，且带合法的 src_files 与 dst_path
+        src_files_raw = data.get("src_files")
+        dst_path_raw = data.get("dst_path")
+        if (
+            not isinstance(data, dict)
+            or data.get("link") is not True
+            or not isinstance(src_files_raw, list)
+            or not src_files_raw
+            or not dst_path_raw
+        ):
+            await _ws_send_error_and_close(
+                websocket,
+                "请求格式错误：需要 {'link': true, 'src_files': [...], 'dst_path': '...'}",
+            )
             return
 
+        # 路径安全：src_files 与 dst_path 都必须通过 ALLOWED_ROOTS 校验
+        try:
+            dst_path = _check_path(Path(dst_path_raw))
+        except HTTPException as e:
+            await _ws_send_error_and_close(websocket, str(e.detail))
+            return
+
+        src_files: list[Path] = []
+        for src in src_files_raw:
+            try:
+                src_files.append(_check_path(Path(src)))
+            except HTTPException as e:
+                # 任一源路径违规即发送错误并关闭，不执行任何链接
+                await _ws_send_error_and_close(websocket, str(e.detail))
+                return
+
+        if not dst_path.is_dir():
+            await _ws_send_error_and_close(
+                websocket, f"目标路径不是有效的目录: {dst_path}"
+            )
+            return
+
+        total = len(src_files)
+        stats = {"linked": 0, "failed": 0, "skipped": 0}
+
         for index, src_path in enumerate(src_files, start=1):
-            if not src_path.exists():
-                await websocket.send_text(f"源文件 {src_path} 不存在，跳过...")
+            # 校验存在性（在线程池中执行，避免阻塞事件循环）
+            if not await asyncio.to_thread(src_path.exists):
+                stats["skipped"] += 1
+                await websocket.send_json(
+                    {
+                        "type": "skip",
+                        "message": f"源文件 {src_path} 不存在，已跳过",
+                        "source": src_path.as_posix(),
+                    }
+                )
                 continue
 
-            if src_path.is_file():
-                await websocket.send_text(
-                    f"正在处理 ({index}/{len(src_files)}) 链接 {src_path}..."
-                )
+            if await asyncio.to_thread(src_path.is_file):
+                # 单个文件链接
                 dst_file = dst_path / src_path.name
-                try:
-                    if dst_file.exists():
-                        dst_file.unlink()
-                    os.link(src_path, dst_file)
-                except Exception as e:
-                    logger.error("链接文件 %s 到 %s 时出错: %s", src_path, dst_file, e)
-                    await websocket.send_text(f"链接文件 {src_path} 时出错: {e}")
-            else:
-                async for progress in link_full_path_async(src_path, dst_path):
-                    await websocket.send_text(
-                        f"正在处理 ({index}/{len(src_files)})<br>"
-                        + f"文件夹内剩余 ({progress['current']}/{progress['total']}) 链接 {progress['source']} ..."  # noqa: E501
+                # 防御：目标即源文件本身（目标目录就是源所在目录），
+                # 若继续会先 unlink 源再 link，导致源文件永久丢失
+                if dst_file == src_path:
+                    stats["skipped"] += 1
+                    await websocket.send_json(
+                        {
+                            "type": "skip",
+                            "message": "源与目标相同，跳过",
+                            "source": src_path.as_posix(),
+                        }
                     )
+                    continue
+                try:
+                    if await asyncio.to_thread(dst_file.exists):
+                        await asyncio.to_thread(dst_file.unlink)
+                    await asyncio.to_thread(os.link, src_path, dst_file)
+                    stats["linked"] += 1
+                    await websocket.send_json(
+                        {
+                            "type": "progress",
+                            "index": index,
+                            "total": total,
+                            "source": src_path.as_posix(),
+                        }
+                    )
+                except OSError as e:
+                    logger.error(
+                        "链接文件 %s 到 %s 时出错: %s", src_path, dst_file, e
+                    )
+                    stats["failed"] += 1
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": _link_error_message(e),
+                            "source": src_path.as_posix(),
+                        }
+                    )
+            else:
+                # 目录链接：防御自嵌套（dst 位于 src 内部时跳过）
+                if dst_path.resolve().is_relative_to(src_path.resolve()):
+                    stats["skipped"] += 1
+                    await websocket.send_json(
+                        {
+                            "type": "skip",
+                            "message": f"目标路径位于源目录 {src_path} 内部，已跳过以避免自嵌套",
+                            "source": src_path.as_posix(),
+                        }
+                    )
+                    continue
 
-        await websocket.send_text("链接已全部完成")
-        await asyncio.sleep(1)
+                await websocket.send_json(
+                    {
+                        "type": "info",
+                        "message": f"开始链接文件夹 {src_path} ...",
+                    }
+                )
+                async for frame in link_full_path_async(src_path, dst_path):
+                    frame["index"] = index
+                    frame["total"] = total
+                    if frame["type"] == "progress":
+                        stats["linked"] += 1
+                    elif frame["type"] == "error":
+                        stats["failed"] += 1
+                    elif frame["type"] == "skip":
+                        stats["skipped"] += 1
+                    await websocket.send_json(frame)
+
+        # done 为最后一条消息，随后关闭连接
+        await websocket.send_json({"type": "done", **stats})
+        await websocket.close()
 
     except WebSocketDisconnect:
         logger.info("客户端已断开连接")
     except Exception as e:
         logger.error("发生未预期的错误: %s", e)
-        await websocket.send_text(f"发生错误: {e}")
+        await _ws_send_error_and_close(websocket, f"发生错误: {e}")
 
 
-async def link_full_path_async(src: Path, dst: Path):
-    if not src.is_dir() or not dst.is_dir():
-        raise HTTPException(status_code=400, detail="源或目标路径不是有效的目录")
+async def link_full_path_async(
+    src: Path, dst: Path
+) -> AsyncGenerator[dict, None]:
+    """递归链接整个目录到 dst / src.name，逐文件产生结构化进度帧。
 
+    所有文件系统操作均在线程池中执行，避免阻塞事件循环。
+    帧格式：
+    - {"type": "progress", "current": i, "file_total": n, "source": "..."}
+    - {"type": "error", "message": "...", "source": "..."}
+    不在此函数中抛出 HTTPException，单文件失败记入 error 帧后继续。
+    """
     src = src.resolve()
     dst = dst.resolve()
     folder_name = src.name
 
-    total_files = sum(1 for _ in src.rglob("*") if _.is_file())  # 计算总文件数
-    file_list = (item for item in src.rglob("*") if item.is_file())
+    # 防御：链接根 dst/src.name 与 src 相同（dst 恰好是 src 的父目录），
+    # 继续执行会把目录内每个文件先删后链，造成数据丢失
+    if (dst / folder_name) == src:
+        yield {
+            "type": "skip",
+            "message": "源与目标相同，跳过",
+            "source": src.as_posix(),
+        }
+        return
+
+    def _collect_files() -> list[Path]:
+        """一次性物化目录下的文件清单（跳过符号链接）。"""
+        return [
+            item
+            for item in src.rglob("*")
+            if item.is_file() and not item.is_symlink()
+        ]
+
+    try:
+        file_list = await asyncio.to_thread(_collect_files)
+    except Exception as e:
+        logger.error("遍历源目录 %s 时出错: %s", src, e)
+        yield {
+            "type": "error",
+            "message": f"遍历源目录失败: {e}",
+            "source": src.as_posix(),
+        }
+        return
+
+    file_total = len(file_list)
 
     for index, item in enumerate(file_list, start=1):
-        try:
-            relative_path = item.relative_to(src)
-            target_path = dst / folder_name / relative_path
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-
-            if target_path.exists():
-                target_path.unlink()
-
-            os.link(item, target_path)
+        relative_path = item.relative_to(src)
+        target_path = dst / folder_name / relative_path
+        # 防御：目标路径即源文件本身时绝不允许 unlink/link
+        if target_path == item:
             yield {
-                "current": index,
-                "total": total_files,
+                "type": "skip",
+                "message": "源与目标相同，跳过",
                 "source": item.as_posix(),
-                "target": target_path.as_posix(),
+            }
+            continue
+        try:
+            await asyncio.to_thread(
+                target_path.parent.mkdir, parents=True, exist_ok=True
+            )
+            if await asyncio.to_thread(target_path.exists):
+                try:
+                    await asyncio.to_thread(target_path.unlink)
+                except OSError as e:
+                    raise OSError(e.errno, f"删除已存在的目标文件失败: {e.strerror}")
+
+            await asyncio.to_thread(os.link, item, target_path)
+            yield {
+                "type": "progress",
+                "current": index,
+                "file_total": file_total,
+                "source": item.as_posix(),
+            }
+        except OSError as e:
+            logger.error("链接文件 %s 到 %s 时出错: %s", item, target_path, e)
+            yield {
+                "type": "error",
+                "message": _link_error_message(e),
+                "source": item.as_posix(),
             }
         except Exception as e:
-            logger.error("链接文件 %s 到 %s 时出错: %s", item, target_path, e)
+            logger.error("处理文件 %s 时出错: %s", item, e)
+            yield {
+                "type": "error",
+                "message": f"处理文件失败: {e}",
+                "source": item.as_posix(),
+            }
 
 
 def file_info(item: Path, stat_info: os.stat_result | None = None) -> dict:
+    """构造单个文件/目录的信息字典，文件类型附带硬链接数 nlink。"""
     if stat_info is None:
         stat_info = os.stat(item)
-    item_type = "directory" if item.is_dir() else "file"
-    item_size = "--" if item.is_dir() else format_file_size(stat_info.st_size)
-    return {
+    is_dir = item.is_dir()
+    info = {
         "name": item.name,
-        "type": item_type,
+        "type": "directory" if is_dir else "file",
         "path": item.absolute().as_posix(),
-        "size": item_size,
+        "size": "--" if is_dir else format_file_size(stat_info.st_size),
     }
+    if not is_dir:
+        info["nlink"] = stat_info.st_nlink
+    return info
 
 
-def format_file_size(bytes_num, decimal_places=2):
+def format_file_size(bytes_num: float, decimal_places: int = 2) -> str:
     """
     将字节数转换为可读性好的文件大小字符串
 
@@ -254,6 +462,7 @@ def format_file_size(bytes_num, decimal_places=2):
 
 
 def contains_single_link_file(path: Path) -> bool:
+    """递归检查目录中是否存在硬链接数为 1 的文件。"""
     try:
         for item in path.rglob("*"):  # 递归遍历所有文件和目录
             if item.is_file() and item.stat().st_nlink == 1:
@@ -261,6 +470,3 @@ def contains_single_link_file(path: Path) -> bool:
     except Exception as e:
         logger.error("处理路径 %s 时出错: %s", path, e)
     return False
-
-
-

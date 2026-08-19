@@ -1,424 +1,493 @@
-// 文件面板元素
+'use strict';
+
+/* =====================================================================
+ * hlink-tool 前端逻辑
+ * - 双面板文件浏览（源面板可选，目标面板导航）
+ * - WebSocket 实时创建硬链接（结构化 JSON 协议）
+ * ===================================================================== */
+
+// ---------- DOM 引用 ----------
 const srcList = document.getElementById('src-list');
 const dstList = document.getElementById('dst-list');
+const statusMessage = document.getElementById('status-message');
+const filterCheckbox = document.getElementById('filter-src');
+const confirmModal = document.getElementById('confirm-modal');
+const newFolderModal = document.getElementById('new-folder-modal');
+const newFolderInput = document.getElementById('new-folder-input');
 
-// 全局状态
+// ---------- 全局状态 ----------
 const appState = {
-    selectedFiles: new Set(),
-    dirSizeCache: {},
+    /** 源面板中选中的文件路径集合（只跟踪源面板，避免 stale DOM 引用） */
+    selectedPaths: new Set(),
+    /** 目录大小缓存：path -> 大小字符串 */
+    dirSizeCache: new Map(),
+    /** Ctrl 多选模式 */
     multiselectMode: false,
+    /** 新建文件夹模态框当前作用的面板：'src' | 'dst' */
+    newFolderTarget: 'src',
     get srcPath() { return document.getElementById('src-path').value; },
     get dstPath() { return document.getElementById('dst-path').value; }
 };
 
-// 初始化应用
+/** 细线内联 SVG 图标 */
+const ICONS = {
+    folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>',
+    file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/></svg>'
+};
+
+// ---------- 初始化 ----------
 document.addEventListener('DOMContentLoaded', initializeApp);
 
 async function initializeApp() {
+    setupEventListeners();
     try {
-        const default_dir = await setupDefaultDirectories();
-        await loadInitialFileLists(default_dir);
-        setupEventListeners();
-        updateStatus('应用初始化完成', 'success');
+        const defaultDir = await fetchDefaultDir();
+        updateStatus('正在加载文件列表', 'loading');
+        await Promise.all([
+            loadAndRenderFileList(defaultDir, srcList, filterCheckbox.checked),
+            loadAndRenderFileList(defaultDir, dstList, false)
+        ]);
+        updateStatus('初始化完成', 'success');
     } catch (error) {
         updateStatus(`初始化失败: ${error.message}`, 'error');
     }
 }
 
-// 设置默认目录
-async function setupDefaultDirectories() {
-    updateStatus('正在获取默认目录', 'loading');
-    const response = await fetch("/api/default_dir");
-
-    if (!response.ok) {
-        if (response.status === 400) throw new Error('无法获取默认目录');
-        throw new Error(`服务器响应错误: ${response.status}`);
-    }
-
-    const { dir } = await response.json();
-    updateStatus('默认目录获取成功', 'success');
-    return dir;
-}
-
-// 加载初始文件列表
-async function loadInitialFileLists(defaultDir) {
-    updateStatus('正在加载文件列表', 'loading');
-    const isFilterEnabled = document.getElementById('filter-src').checked;
-
-    await Promise.all([
-        loadAndRenderFileList(defaultDir, srcList, isFilterEnabled),
-        loadAndRenderFileList(defaultDir, dstList, false)
-    ]);
-
-    updateStatus('文件列表加载完成', 'success');
-}
-
-// 设置事件监听器
-async function setupEventListeners() {
-    setupNewFolderModals();
+function setupEventListeners() {
+    setupNewFolderModal();
     setupLinkOperations();
     setupRefreshButton();
     setupFilterToggle();
-    enablePathEdit();
+    setupPathInputs();
     setupMultiSelectKeys();
     setupKeyboardShortcuts();
 }
 
-// 新建文件夹模态框相关
-async function setupNewFolderModals() {
-    bindNewFolderModal('src');
-    bindNewFolderModal('dst');
+// ---------- API：默认目录 ----------
+async function fetchDefaultDir() {
+    const response = await fetch('/api/default_dir');
+    if (!response.ok) throw new Error(`无法获取默认目录 (HTTP ${response.status})`);
+    const { dir } = await response.json();
+    return dir;
 }
 
-async function bindNewFolderModal(type) {
-    const pathInputId = `${type}-path`;
-    const listElement = type === 'src' ? srcList : dstList;
-    const btn = document.getElementById(`${type}-new-folder-btn`);
+/* =====================================================================
+ * 新建文件夹（模态框事件只绑定一次，目标面板记录在 appState）
+ * ===================================================================== */
+function setupNewFolderModal() {
+    const confirmBtn = document.getElementById('new-folder-confirm-btn');
+    const cancelBtn = document.getElementById('new-folder-cancel-btn');
 
-    if (!btn) return;
+    document.getElementById('src-new-folder-btn').addEventListener('click', () => openNewFolderModal('src'));
+    document.getElementById('dst-new-folder-btn').addEventListener('click', () => openNewFolderModal('dst'));
 
-    btn.addEventListener('click', () => showNewFolderModal(type, pathInputId, listElement));
-}
-
-async function showNewFolderModal(type, pathInputId, listElement) {
-    const modal = document.getElementById('new-folder-modal');
-    const message = modal.querySelector('#new-folder-message');
-    const confirmBtn = modal.querySelector('#new-folder-confirm-btn');
-    const cancelBtn = modal.querySelector('#new-folder-cancel-btn');
-
-    // 创建输入框
-    message.innerHTML = '<input type="text" id="new-folder-input" placeholder="请输入新文件夹名称" class="folder-input">';
-    modal.classList.add('active');
-
-    // 事件处理器
-    const closeModal = () => modal.classList.remove('active');
-
-    const handleCancel = () => closeModal();
-
-    const handleConfirm = async () => {
-        const input = document.getElementById('new-folder-input');
-        const folderName = input.value.trim();
-
-        if (!folderName) {
-            input.focus();
-            input.classList.add('error');
-            return;
+    confirmBtn.addEventListener('click', handleNewFolderConfirm);
+    cancelBtn.addEventListener('click', closeNewFolderModal);
+    newFolderModal.addEventListener('click', (e) => {
+        if (e.target === newFolderModal) closeNewFolderModal();
+    });
+    newFolderInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleNewFolderConfirm();
         }
-
-        input.classList.remove('error');
-        closeModal();
-
-        const currentPath = document.getElementById(pathInputId).value;
-        await createNewFolder(currentPath, folderName, type, listElement);
-    };
-
-    const handleOverlayClick = (e) => {
-        if (e.target === modal) closeModal();
-    };
-
-    // 绑定事件
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    modal.addEventListener('click', handleOverlayClick);
-
-
-    // 设置输入框焦点和回车支持
-    setTimeout(() => {
-        const input = document.getElementById('new-folder-input');
-        if (input) {
-            input.focus();
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') handleConfirm();
-            });
-        }
-    }, 50);
+    });
 }
 
-async function createNewFolder(currentPath, folderName, type, listElement) {
+function openNewFolderModal(type) {
+    appState.newFolderTarget = type;
+    newFolderInput.value = '';
+    newFolderInput.classList.remove('error');
+    newFolderModal.classList.add('active');
+    setTimeout(() => newFolderInput.focus(), 50);
+}
+
+function closeNewFolderModal() {
+    newFolderModal.classList.remove('active');
+}
+
+async function handleNewFolderConfirm() {
+    const folderName = newFolderInput.value.trim();
+    if (!folderName) {
+        newFolderInput.focus();
+        newFolderInput.classList.add('error');
+        return;
+    }
+    newFolderInput.classList.remove('error');
+    closeNewFolderModal();
+
+    const type = appState.newFolderTarget;
+    const currentPath = type === 'src' ? appState.srcPath : appState.dstPath;
+    await createNewFolder(currentPath, folderName, type);
+}
+
+/** 按契约：POST /api/create_dir，JSON 请求体 {path, name} */
+async function createNewFolder(currentPath, folderName, type) {
     try {
-        const response = await fetch(
-            `/api/create_dir?path=${encodeURIComponent(currentPath)}&name=${encodeURIComponent(folderName)}`,
-            { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-        );
+        const response = await fetch('/api/create_dir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: currentPath, name: folderName })
+        });
 
         if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.detail || response.status);
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `HTTP ${response.status}`);
         }
 
         updateStatus('文件夹创建成功', 'success');
-        const isFilterEnabled = type === 'src' && document.getElementById('filter-src').checked;
+        const listElement = type === 'src' ? srcList : dstList;
+        const isFilterEnabled = type === 'src' && filterCheckbox.checked;
         await loadAndRenderFileList(currentPath, listElement, isFilterEnabled);
     } catch (error) {
         updateStatus(`新建文件夹失败: ${error.message}`, 'error');
     }
 }
 
-// 链接操作相关
+/* =====================================================================
+ * 硬链接操作（WebSocket 结构化 JSON 协议）
+ * ===================================================================== */
 function setupLinkOperations() {
-    const linkBtn = document.getElementById('link-btn');
-    const cancelBtn = document.getElementById('cancel-btn');
-    const linkConfirmBtn = document.getElementById('confirm-btn');
-    const confirmModal = document.getElementById('confirm-modal');
-
-    linkBtn.addEventListener('click', showLinkConfirmModal);
-    cancelBtn.addEventListener('click', hideLinkConfirmModal);
-    linkConfirmBtn.addEventListener('click', handleLinkConfirm);
-
+    document.getElementById('link-btn').addEventListener('click', showLinkConfirmModal);
+    document.getElementById('cancel-btn').addEventListener('click', hideLinkConfirmModal);
+    document.getElementById('confirm-btn').addEventListener('click', handleLinkConfirm);
     confirmModal.addEventListener('click', (e) => {
         if (e.target === confirmModal) hideLinkConfirmModal();
     });
 }
 
 function showLinkConfirmModal() {
-    if (appState.selectedFiles.size === 0) {
-        updateStatus('请先选择要链接的文件', 'error');
+    const count = getSelectedCount();
+    if (count === 0) {
+        updateStatus('请先在源目录选择要链接的文件', 'error');
         return;
     }
-
-    const confirmMessage = document.getElementById('confirm-message');
-    confirmMessage.textContent = `确定要将 ${appState.selectedFiles.size} 个文件链接到目标目录 ${appState.dstPath} 中吗？`;
-    document.getElementById('confirm-modal').classList.add('active');
+    document.getElementById('confirm-message').textContent =
+        `确定要将选中的 ${count} 个文件(夹)链接到目标目录 ${appState.dstPath} 中吗？`;
+    confirmModal.classList.add('active');
 }
 
 function hideLinkConfirmModal() {
-    document.getElementById('confirm-modal').classList.remove('active');
+    confirmModal.classList.remove('active');
 }
 
-async function handleLinkConfirm() {
+function handleLinkConfirm() {
     hideLinkConfirmModal();
-    updateStatus('正在创建硬链接...', 'loading');
+    const srcFiles = Array.from(appState.selectedPaths);
+    if (srcFiles.length === 0) return;
 
-    const ws = new WebSocket("/api/ws/link_files");
+    updateStatus('正在连接服务器...', 'loading');
+    const ws = new WebSocket('/api/ws/link_files');
+    /** 汇总结果：收到 done 帧后据此显示最终状态 */
+    const result = { done: false, linked: 0, failed: 0, skipped: 0 };
 
     ws.onopen = () => {
-        updateStatus('已连接服务器，开始发送链接请求...', 'loading');
-        const payload = {
-            link: true,
-            src_files: Array.from(appState.selectedFiles).map(fileElem =>
-                fileElem.querySelector('.file-path').textContent
-            ),
-            dst_path: appState.dstPath
-        };
-        ws.send(JSON.stringify(payload));
+        ws.send(JSON.stringify({ link: true, src_files: srcFiles, dst_path: appState.dstPath }));
     };
 
-    ws.onmessage = (evt) => updateStatus(evt.data, 'loading');
+    ws.onmessage = (evt) => handleWsMessage(evt, result);
 
-    ws.onerror = () => {
-        updateStatus('WebSocket 连接发生错误', 'error');
-    };
+    ws.onerror = () => updateStatus('WebSocket 连接发生错误', 'error');
 
     ws.onclose = async () => {
-        updateStatus('链接操作已完成，正在刷新目标目录...', 'success');
+        // 先清空选择并刷新目标目录（刷新会覆盖状态栏），最后再写总结
+        clearAllSelections();
         await loadAndRenderFileList(appState.dstPath, dstList, false);
-        updateStatus(`成功将 ${appState.selectedFiles.size} 个文件(夹)链接到 ${appState.dstPath}`, 'success');
+        if (result.done) {
+            const hasFailure = result.failed > 0;
+            updateStatus(
+                `完成：链接 ${result.linked} 项 · 失败 ${result.failed} · 跳过 ${result.skipped}`,
+                hasFailure ? 'error' : 'success'
+            );
+        } else {
+            // 未收到 done 帧即断开，不能谎报成功
+            updateStatus('连接中断，链接结果未知', 'error');
+        }
     };
 }
 
-// 刷新按钮
+/** 解析服务端 JSON 帧并分发 */
+function handleWsMessage(evt, result) {
+    let msg;
+    try {
+        msg = JSON.parse(evt.data);
+    } catch {
+        updateStatus(String(evt.data), 'loading');
+        return;
+    }
+
+    switch (msg.type) {
+        case 'progress':
+            showWsProgress(msg);
+            break;
+        case 'info':
+            updateStatus(msg.message, 'info');
+            break;
+        case 'skip':
+            updateStatus(`跳过：${msg.message}`, 'warning');
+            break;
+        case 'error':
+            updateStatus(`错误：${msg.message}`, 'error');
+            break;
+        case 'done':
+            result.done = true;
+            result.linked = msg.linked ?? 0;
+            result.failed = msg.failed ?? 0;
+            result.skipped = msg.skipped ?? 0;
+            break;
+        default:
+            if (msg.message) updateStatus(msg.message, 'loading');
+    }
+}
+
+/** 进度帧：正在处理 (i/n)，目录时附带文件夹内进度；文件名等宽、截断 */
+function showWsProgress(msg) {
+    const name = msg.source ? String(msg.source).split('/').filter(Boolean).pop() || msg.source : '';
+    let head = `正在处理 (${msg.index}/${msg.total})`;
+    if (msg.file_total != null) {
+        head += ` 文件夹内 ${msg.current}/${msg.file_total}`;
+    }
+
+    statusMessage.textContent = '';
+    statusMessage.append(document.createTextNode(head + ' '));
+    const pathSpan = document.createElement('span');
+    pathSpan.className = 'progress-path';
+    pathSpan.textContent = truncateMiddle(String(name), 36);
+    pathSpan.title = String(msg.source || '');
+    statusMessage.append(pathSpan);
+    setStatusColor('loading');
+}
+
+/** 中段截断，避免超长文件名撑爆状态栏 */
+function truncateMiddle(text, maxLen) {
+    if (text.length <= maxLen) return text;
+    const keep = maxLen - 1;
+    const headLen = Math.ceil(keep / 2);
+    const tailLen = Math.floor(keep / 2);
+    return text.slice(0, headLen) + '…' + text.slice(text.length - tailLen);
+}
+
+/* =====================================================================
+ * 刷新 / 筛选 / 路径输入
+ * ===================================================================== */
 function setupRefreshButton() {
     document.getElementById('refresh-btn').addEventListener('click', async () => {
         updateStatus('刷新中', 'loading');
-
-        // 清除文件夹大小缓存
-        Object.keys(appState.dirSizeCache).forEach(key => {
-            delete appState.dirSizeCache[key];
-        });
-
-        const isFilterEnabled = document.getElementById('filter-src').checked;
+        appState.dirSizeCache.clear(); // 清目录大小缓存
         await Promise.all([
-            loadAndRenderFileList(appState.srcPath, srcList, isFilterEnabled),
+            loadAndRenderFileList(appState.srcPath, srcList, filterCheckbox.checked),
             loadAndRenderFileList(appState.dstPath, dstList, false)
         ]);
     });
 }
 
-// 筛选切换
 function setupFilterToggle() {
-    document.getElementById('filter-src').addEventListener('change', () => {
-        const isFilterEnabled = document.getElementById('filter-src').checked;
+    filterCheckbox.addEventListener('change', () => {
         updateStatus('应用筛选模式', 'loading');
-        loadAndRenderFileList(appState.srcPath, srcList, isFilterEnabled);
+        loadAndRenderFileList(appState.srcPath, srcList, filterCheckbox.checked);
     });
 }
 
-// 多选模式
+/** 路径输入框：回车跳转，Esc 还原当前路径 */
+function setupPathInputs() {
+    document.querySelectorAll('.path-display-input').forEach(el => {
+        el.addEventListener('keydown', (e) => {
+            const type = el.dataset.type;
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const newPath = el.value.trim() || '/';
+                const isFilterEnabled = type === 'src' && filterCheckbox.checked;
+                loadAndRenderFileList(newPath, type === 'src' ? srcList : dstList, isFilterEnabled);
+            } else if (e.key === 'Escape') {
+                e.stopPropagation(); // 输入框自己的 Esc：还原路径，不触发全局清除选择
+                el.value = type === 'src' ? appState.srcPath : appState.dstPath;
+                el.blur();
+            }
+        });
+    });
+}
+
+/* =====================================================================
+ * 多选与快捷键
+ * ===================================================================== */
 function setupMultiSelectKeys() {
     document.addEventListener('keydown', (event) => {
-        if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
-            appState.multiselectMode = true;
-        }
+        if (event.key === 'Control') appState.multiselectMode = true;
     });
-
     document.addEventListener('keyup', (event) => {
-        if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
-            appState.multiselectMode = false;
-        }
+        if (event.key === 'Control') appState.multiselectMode = false;
     });
-
     window.addEventListener('blur', () => {
         appState.multiselectMode = false;
     });
 }
 
-// 键盘快捷键
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (event) => {
-        // Ctrl+L: 触发链接操作
-        if (event.ctrlKey && event.key === 'l') {
+        // Ctrl+L：发起链接
+        if (event.ctrlKey && (event.key === 'l' || event.key === 'L')) {
             event.preventDefault();
             showLinkConfirmModal();
+            return;
         }
-        // Escape: 清除所有选择
-        if (event.key === 'Escape' && !document.querySelector('.modal-overlay.active')) {
-            clearAllSelections();
-            updateStatus('已清除选择', 'info');
+        if (event.key !== 'Escape') return;
+
+        // 模态框打开时：Esc 关闭模态框（即使焦点在模态框输入框内）
+        const openModal = document.querySelector('.modal-overlay.active');
+        if (openModal) {
+            openModal.classList.remove('active');
+            return;
         }
+        // 焦点在输入框内时：不拦截 Esc，交给输入框自身逻辑
+        const tag = event.target && event.target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+        clearAllSelections();
+        updateStatus('已清除选择', 'info');
     });
 }
 
-// 路径编辑支持
-function enablePathEdit() {
-    document.querySelectorAll('.path-display-input').forEach(el => {
-        el.addEventListener('keydown', function (e) {
-            const type = el.dataset.type;
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const newPath = el.value.trim();
-                const isFilterEnabled = type === 'src' && document.getElementById('filter-src').checked;
-                loadAndRenderFileList(newPath, type === 'src' ? srcList : dstList, isFilterEnabled);
-            } else if (e.key === 'Escape') {
-                el.value = type === 'src' ? appState.srcPath : appState.dstPath;
-            }
-        });
-    });
-}
-
-// 文件列表管理
+/* =====================================================================
+ * 文件列表加载与渲染
+ * ===================================================================== */
 async function loadAndRenderFileList(path, listElement, filterSingleLink = false) {
+    const type = listElement.id === 'src-list' ? 'src' : 'dst';
     updateStatus('正在加载文件列表...', 'loading');
-    listElement.innerHTML = createLoadingHTML('正在加载文件列表...');
+    showLoading(listElement, '正在加载文件列表...');
 
     try {
         const params = new URLSearchParams({ path, filter_single_link: filterSingleLink });
-        const response = await fetch(`/api/list_dir?${params.toString()}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
+        const response = await fetch(`/api/list_dir?${params.toString()}`);
         if (!response.ok) {
-            if (response.status === 400) {
-                const error = await response.json();
-                throw new Error(error.detail || '无法加载文件列表');
-            }
-            throw new Error(`服务器响应错误: ${response.status}`);
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `服务器响应错误: ${response.status}`);
         }
 
         const fileList = await response.json();
-        const pathDisplay = listElement.parentElement.querySelector(".path-display-input");
+        const pathDisplay = listElement.parentElement.querySelector('.path-display-input');
         pathDisplay.value = path;
 
-        renderFileList(fileList, listElement);
-        const panelType = pathDisplay.getAttribute("data-type") === 'src' ? '源' : '目标';
-        updateStatus(`${panelType}目录加载完成`, 'success');
+        // 源列表重新渲染时清空选择，杜绝 stale 引用
+        if (type === 'src') appState.selectedPaths.clear();
 
+        const count = renderFileList(fileList, listElement, type);
+        const panelName = type === 'src' ? '源' : '目标';
+        updateStatus(count === 0 ? `${panelName}目录为空` : `${panelName}目录加载完成`,
+            count === 0 ? 'info' : 'success');
     } catch (error) {
-        const type = listElement.id === 'src-list' ? 'src' : 'dst';
-        listElement.innerHTML = createErrorHTML(error.message, type);
-        bindRetryDefaultBtn(listElement, type);
+        showLoadError(listElement, type, error.message);
         updateStatus(`加载失败: ${error.message}`, 'error');
     }
 }
 
-function renderFileList(fileList, listElement) {
-    listElement.innerHTML = '';
-    const type = listElement.id === 'src-list' ? 'src' : 'dst';
+function renderFileList(fileList, listElement, type) {
+    listElement.textContent = '';
 
     if (!fileList || fileList.length === 0) {
-        updateStatus('此目录为空', 'info');
-        listElement.innerHTML = '<div class="empty-directory"><div class="empty-icon">📭</div>此目录为空</div>';
-        return;
+        // 空目录：中性提示，不是错误
+        const empty = document.createElement('div');
+        empty.className = 'empty-directory';
+        empty.textContent = '此目录为空';
+        listElement.appendChild(empty);
+        return 0;
     }
 
-    fileList.forEach(item => createFileItem(item, listElement, type));
+    const fragment = document.createDocumentFragment();
+    fileList.forEach(item => fragment.appendChild(createFileItem(item, type, listElement)));
+    listElement.appendChild(fragment);
 
-    // 异步加载文件夹大小
+    // 异步加载目录大小（".." 项不发请求）
     loadDirectorySizes(listElement);
+    return fileList.length;
 }
 
-function createFileItem(item, listElement, type) {
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-item';
-    if (item.isParent) {
-        fileItem.classList.add('parent-dir');
+/** 用 createElement + textContent 构建文件项，防止文件名 XSS 注入 */
+function createFileItem(item, type, listElement) {
+    const el = document.createElement('div');
+    el.className = 'file-item';
+    el.dataset.path = item.path;
+    if (item.isParent) el.classList.add('parent-dir');
+
+    // 图标
+    const icon = document.createElement('span');
+    icon.className = item.type === 'directory' ? 'file-icon icon-dir' : 'file-icon icon-file';
+    icon.innerHTML = item.isParent ? ICONS.back : (item.type === 'directory' ? ICONS.folder : ICONS.file);
+    el.appendChild(icon);
+
+    // 文件名
+    const name = document.createElement('span');
+    name.className = 'file-name';
+    name.textContent = item.name;
+    name.title = item.name;
+    el.appendChild(name);
+
+    // nlink 徽标：已有多个硬链接的文件显示 ×N
+    if (!item.isParent && item.type === 'file' && item.nlink > 1) {
+        const badge = document.createElement('span');
+        badge.className = 'nlink-badge';
+        badge.textContent = `×${item.nlink}`;
+        badge.title = `该文件已有 ${item.nlink} 个硬链接`;
+        el.appendChild(badge);
     }
 
-    const icon = item.type === 'directory' ? '📁' : '📄';
-    const sizeHtml = getSizeHtml(item);
+    // 大小：父目录项直接显示 "--"，不参与异步统计
+    const size = document.createElement('span');
+    size.className = 'file-size';
+    if (item.isParent) {
+        size.textContent = '--';
+    } else if (item.type === 'directory') {
+        const dirSize = document.createElement('span');
+        dirSize.className = 'dir-size';
+        dirSize.dataset.path = item.path;
+        dirSize.textContent = appState.dirSizeCache.get(item.path) || '计算中...';
+        size.appendChild(dirSize);
+    } else {
+        size.textContent = item.size;
+    }
+    el.appendChild(size);
 
-    fileItem.innerHTML = `
-        <div class="file-icon">${icon}</div>
-        <div class="file-name" title="${item.name}">${item.name}</div>
-        <div class="file-size">${sizeHtml}</div>
-        <div class="file-path" style="display:none;">${item.path}</div>
-    `;
-
-    // 源面板支持选择文件
-    if (type === 'src') {
-        fileItem.addEventListener('click', () => selectFile(item, fileItem));
+    // 源面板可选择（".." 除外），渲染时按路径 Set 比对选中态
+    if (type === 'src' && !item.isParent) {
+        if (appState.selectedPaths.has(item.path)) el.classList.add('selected');
+        el.addEventListener('click', () => selectFile(item, el));
     }
 
     // 双击进入目录
-    fileItem.addEventListener('dblclick', () => {
-        if (item.type === 'directory') {
-            handleDirectoryDoubleClick(item, listElement);
-        }
+    el.addEventListener('dblclick', () => {
+        if (item.type === 'directory') enterDirectory(item, listElement);
     });
 
-    listElement.appendChild(fileItem);
+    return el;
 }
 
-function getSizeHtml(item) {
-    if (item.type === 'directory') {
-        if (appState.dirSizeCache[item.path]) {
-            return `<span class="dir-size" data-path="${item.path}">${appState.dirSizeCache[item.path]}</span>`;
-        }
-        return `<span class="dir-size" data-path="${item.path}">计算中...</span>`;
-    }
-    return item.size;
-}
-
-function handleDirectoryDoubleClick(item, listElement) {
+function enterDirectory(item, listElement) {
     updateStatus(`正在进入目录: ${item.name}`, 'loading');
-    const newPath = item.path;
-    const pathDisplay = listElement.parentElement.querySelector(".path-display-input");
-    const isSrc = pathDisplay.getAttribute("data-type") === 'src';
-    const isFilterEnabled = isSrc && document.getElementById('filter-src').checked;
-    loadAndRenderFileList(newPath, listElement, isFilterEnabled);
+    const type = listElement.id === 'src-list' ? 'src' : 'dst';
+    const isFilterEnabled = type === 'src' && filterCheckbox.checked;
+    loadAndRenderFileList(item.path, listElement, isFilterEnabled);
 }
 
+/** 异步统计目录大小（带缓存；不含 ".."，因其不渲染 .dir-size） */
 async function loadDirectorySizes(listElement) {
-    const dirSizeSpans = listElement.querySelectorAll('.dir-size');
+    const spans = Array.from(listElement.querySelectorAll('.dir-size'));
 
-    const tasks = Array.from(dirSizeSpans).map(async span => {
-        const dirPath = span.getAttribute('data-path');
-
-        if (appState.dirSizeCache[dirPath]) {
-            span.textContent = appState.dirSizeCache[dirPath];
+    const tasks = spans.map(async (span) => {
+        const dirPath = span.dataset.path;
+        const cached = appState.dirSizeCache.get(dirPath);
+        if (cached) {
+            span.textContent = cached;
             return;
         }
-
         try {
             const response = await fetch(`/api/dir_size?path=${encodeURIComponent(dirPath)}`);
-            if (!response.ok) throw new Error('获取文件夹大小失败');
-
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             const size = data || '未知';
-            appState.dirSizeCache[dirPath] = size;
+            appState.dirSizeCache.set(dirPath, size);
             span.textContent = size;
-        } catch (e) {
-            appState.dirSizeCache[dirPath] = '未知';
+        } catch {
+            appState.dirSizeCache.set(dirPath, '未知');
             span.textContent = '未知';
         }
     });
@@ -426,103 +495,110 @@ async function loadDirectorySizes(listElement) {
     await Promise.allSettled(tasks);
 }
 
-// 文件选择功能
-function selectFile(file, fileElement) {
-    if (appState.selectedFiles.has(fileElement)) {
-        // 取消选择
-        fileElement.classList.remove('selected');
-        appState.selectedFiles.delete(fileElement);
+/* =====================================================================
+ * 选择管理（只跟踪源面板；以路径为标识，计数实时 DOM 校验）
+ * ===================================================================== */
+function selectFile(item, el) {
+    if (appState.selectedPaths.has(item.path)) {
+        appState.selectedPaths.delete(item.path);
+        el.classList.remove('selected');
     } else {
-        // 选择文件
-        if (!appState.multiselectMode) {
-            clearAllSelections();
-        }
-
-        appState.selectedFiles.add(fileElement);
-        fileElement.classList.add('selected');
+        if (!appState.multiselectMode) clearAllSelections();
+        appState.selectedPaths.add(item.path);
+        el.classList.add('selected');
     }
-
-    updateSelectionStatus(file);
+    updateSelectionStatus(item.name);
 }
 
+/** 只清源面板的选择，绝不动目标面板 */
 function clearAllSelections() {
-    document.querySelectorAll('.file-item').forEach(item => {
-        item.classList.remove('selected');
-    });
-    appState.selectedFiles.clear();
+    appState.selectedPaths.clear();
+    srcList.querySelectorAll('.file-item.selected').forEach(el => el.classList.remove('selected'));
 }
 
-function updateSelectionStatus(file) {
-    if (appState.selectedFiles.size === 0) {
+/** 选中计数：基于实时 DOM 校验，剔除已被重渲染清掉的引用 */
+function getSelectedCount() {
+    if (appState.selectedPaths.size === 0) return 0;
+    const renderedPaths = new Set();
+    srcList.querySelectorAll('.file-item').forEach(el => renderedPaths.add(el.dataset.path));
+    for (const p of Array.from(appState.selectedPaths)) {
+        if (!renderedPaths.has(p)) appState.selectedPaths.delete(p);
+    }
+    return appState.selectedPaths.size;
+}
+
+function updateSelectionStatus(lastName) {
+    const count = getSelectedCount();
+    if (count === 0) {
         updateStatus('未选择任何文件', 'info');
-    } else if (appState.selectedFiles.size === 1) {
-        updateStatus(`已选择: ${file.name}`, 'info');
+    } else if (count === 1) {
+        updateStatus(`已选择: ${lastName}`, 'info');
     } else {
-        updateStatus(`已选择${appState.selectedFiles.size}个文件`, 'info');
+        updateStatus(`已选择 ${count} 个文件(夹)`, 'info');
     }
 }
 
-// 返回默认目录功能
-function bindRetryDefaultBtn(listElement, type) {
-    const btn = listElement.querySelector('.retry-default-btn');
-    if (!btn) return;
+/* =====================================================================
+ * 加载 / 错误 / 返回默认目录
+ * ===================================================================== */
+function showLoading(listElement, message) {
+    listElement.textContent = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'loading';
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+    const text = document.createElement('div');
+    text.textContent = message;
+    wrap.append(spinner, text);
+    listElement.appendChild(wrap);
+}
 
-    btn.addEventListener('click', async () => {
-        updateStatus('正在返回默认目录...', 'loading');
-        await retryDefaultDirectory(type);
-    });
+/** 真正的加载失败才用 danger 色 */
+function showLoadError(listElement, type, message) {
+    listElement.textContent = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'empty-directory error';
+
+    const text = document.createElement('div');
+    text.textContent = `加载失败：${message}`;
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary retry-default-btn';
+    btn.textContent = '尝试返回默认目录';
+    btn.addEventListener('click', () => retryDefaultDirectory(type));
+
+    wrap.append(text, btn);
+    listElement.appendChild(wrap);
 }
 
 async function retryDefaultDirectory(type) {
     try {
-        const response = await fetch('/api/default_dir');
-        if (!response.ok) throw new Error('无法获取默认目录');
-
-        const { dir } = await response.json();
-        updateStatus('默认目录获取成功', 'success');
-
-        const pathInput = document.getElementById(`${type}-path`);
-        pathInput.value = dir;
-
-        const isFilterEnabled = type === 'src' && document.getElementById('filter-src').checked;
+        updateStatus('正在返回默认目录...', 'loading');
+        const dir = await fetchDefaultDir();
+        document.getElementById(`${type}-path`).value = dir;
+        const isFilterEnabled = type === 'src' && filterCheckbox.checked;
         await loadAndRenderFileList(dir, type === 'src' ? srcList : dstList, isFilterEnabled);
-
     } catch (error) {
         updateStatus(`返回默认目录失败: ${error.message}`, 'error');
     }
 }
 
-// UI辅助函数
-function createLoadingHTML(message) {
-    return `
-        <div class="loading">
-            <div class="spinner"></div>
-            <div style="font-size:15px;font-weight:500;">${message}</div>
-        </div>
-    `;
-}
+/* =====================================================================
+ * 状态栏
+ * ===================================================================== */
+const STATUS_COLORS = {
+    error: 'var(--danger)',
+    success: 'var(--success)',
+    loading: 'var(--warning)',
+    warning: 'var(--warning)',
+    info: 'var(--bronze)' // info 用铜棕色
+};
 
-function createErrorHTML(message, type = 'src') {
-    return `
-        <div class="empty-directory">
-            <div style="font-size:15px;font-weight:500;">加载失败<br>${message}</div>
-            <button class="btn retry-default-btn" data-type="${type}">尝试返回默认目录</button>
-        </div>
-    `;
+function setStatusColor(type) {
+    statusMessage.style.setProperty('--status-color', STATUS_COLORS[type] || STATUS_COLORS.info);
 }
 
 function updateStatus(message, type = 'info') {
-    const statusMessage = document.getElementById('status-message');
-
-    const plainText = message.replace(/<br\s*\/?>/gi, ' | ');
-    statusMessage.textContent = plainText;
-
-    const statusColors = {
-        error: 'var(--danger-color)',
-        success: 'var(--success-color)',
-        loading: 'var(--warning-color)',
-        info: 'var(--success-color)'
-    };
-
-    statusMessage.style.setProperty('--status-color', statusColors[type] || statusColors.info);
+    statusMessage.textContent = String(message).replace(/<br\s*\/?>/gi, ' | ');
+    setStatusColor(type);
 }
