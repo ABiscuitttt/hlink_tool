@@ -1,69 +1,102 @@
-/* ===================== 基础与变量 ===================== */
+/* =====================================================================
+ * hlink-tool · 暖调田野工具风（Warm Fieldwork Utility）
+ * 无蓝紫 / 无渐变 / 无玻璃 / 无弥散阴影 / 无卡片套卡片
+ * ===================================================================== */
+
+/* ===================== 1. 色板与基础变量 ===================== */
+:root {
+    /* 核心色板 */
+    --bg: #ECECEC;
+    /* 暖灰页面底 */
+    --ink: #262626;
+    /* 近黑：主文本 / 深色区块 */
+    --on-dark: #ECECEC;
+    /* 深底上的文字 */
+    --bronze: #AD8F66;
+    /* 铜棕：次级文本 / 辅助信息 */
+    --ochre: #F7DA0A;
+    /* 赭黄：选中态 / 悬停强调 / CTA */
+    --surface: #FBFAF7;
+    /* 暖白面板面 */
+    --border: #D8D4CC;
+    /* 暖调灰边框 */
+    --hairline: #E5E1D8;
+    /* 列表分隔细线 */
+
+    /* 语义色（同温同饱和度阶梯） */
+    --success: #5E8C61;
+    /* 鼠尾草绿 */
+    --danger: #B5542E;
+    /* 烧陶土红 */
+    --warning: #C98A2D;
+    /* 琥珀 */
+
+    /* 派生色 */
+    --selected-bg: #FBF3C4;
+    /* 选中项暖黄底（赭黄 ~18%） */
+    --focus-bg: #F5EFE3;
+    /* 输入框 focus 暖沙底 */
+
+    /* 字体 */
+    --font-ui: -apple-system, "SF Pro SC", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+
+/* ===================== 2. 基础排版 ===================== */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
-:root {
-    /* 主色调与状态色 */
-    --primary-color: #4B5563;
-    /* slate-600 */
-    --primary-hover: #374151;
-    /* gray-700 */
-    --success-color: #10b981;
-    /* 绿色 */
-    --danger-color: #ef4444;
-    /* 红色 */
-    --warning-color: #f59e0b;
-    /* 橙色 */
-    --bg-color: #f3f4f6;
-    /* 浅灰背景 */
-    --border-color: #d1d5db;
-    /* 边框灰 */
-    --text-primary: #1f2937;
-    /* 主文本色 */
-    --text-secondary: #6b7280;
-    /* 次级文本灰 */
-    --transition: all 0.3s ease;
-}
-
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background-color: var(--bg-color);
-    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 14px;
     line-height: 1.6;
+    font-style: normal;
+    /* 中文禁斜体 */
+    background-color: var(--bg);
+    color: var(--ink);
 }
 
-/* ===================== 布局容器 ===================== */
+/* ===================== 3. 布局容器与暗色头部带 ===================== */
 .container {
     max-width: 1400px;
     margin: 0 auto;
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background-color: #fff;
+    background-color: var(--bg);
 }
 
 header {
-    padding: 20px 30px;
-    border-bottom: 2px solid var(--border-color);
-    background: linear-gradient(135deg, #2C3539 0%, #4F4F4F 100%);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 18px 30px 16px;
+    background-color: var(--ink);
+    /* 实底暗色带，禁渐变 */
+    color: var(--on-dark);
+    border-bottom: 3px solid var(--ochre);
 }
 
 header h1 {
-    font-size: 24px;
-    margin-bottom: 15px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    /* 几何感粗体，字距略收紧 */
 }
 
+.header-subtitle {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--bronze);
+    letter-spacing: 0.04em;
+}
+
+/* ===================== 4. 双面板 ===================== */
 .panels-container {
     display: flex;
     flex: 1;
-    gap: 20px;
-    padding: 20px 30px;
+    gap: 16px;
+    padding: 16px 30px;
     overflow: hidden;
 }
 
@@ -71,22 +104,16 @@ header h1 {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
     overflow: hidden;
-    transition: var(--transition);
-}
-
-.panel:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .panel-header {
-    padding: 20px;
-    border-bottom: 1px solid var(--border-color);
-    background-color: #f3f4f6;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    /* 细分隔线，不用灰底块 */
 }
 
 .panel-header-flex {
@@ -95,59 +122,58 @@ header h1 {
     gap: 10px;
 }
 
-.panel-header-flex h2,
-.panel-header-flex .btn-folder {
+.panel-header-flex h2 {
     flex-shrink: 0;
-    margin-bottom: 0;
-}
-
-.panel-header-flex .btn-folder {
-    margin-left: auto;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
 }
 
 .panel-header-flex .path-display-input {
     flex: 1;
-    margin: 0 10px;
+    min-width: 0;
 }
 
-.panel-header h2 {
-    font-size: 18px;
-    color: var(--text-primary);
+.panel-header-flex .btn-folder {
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
-/* ===================== 输入框与路径 ===================== */
-.folder-input,
-.path-display,
-.path-display-input {
-    font-size: 12px;
-    color: var(--text-secondary);
-    background-color: #fff;
-    padding: 8px 12px;
-    border-radius: 4px;
-    border: 1px solid var(--border-color);
-    word-break: break-all;
-    font-family: 'Courier New', monospace;
-}
-
+/* ===================== 5. 输入框 ===================== */
 .folder-input,
 .path-display-input {
     width: 100%;
+    font-family: var(--font-mono);
+    /* 路径用等宽字体 */
+    font-size: 12px;
+    color: var(--bronze);
+    background-color: var(--surface);
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.folder-input,
+/* 修复：两个选择器都必须带 :focus */
+.folder-input:focus,
 .path-display-input:focus {
-    border-color: var(--primary-color);
-    background: #f0f4f8;
-    color: var(--text-primary);
+    background-color: var(--focus-bg);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 2px var(--ink);
+    /* 内描边，不用蓝色外发光 */
 }
 
-/* ===================== 文件列表 ===================== */
+.folder-input.error {
+    border-color: var(--danger);
+    box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+/* ===================== 6. 文件列表 ===================== */
 .file-list {
     flex: 1;
     overflow-y: auto;
-    padding: 10px;
+    padding: 4px 0;
 }
 
 .file-list::-webkit-scrollbar {
@@ -155,232 +181,220 @@ header h1 {
 }
 
 .file-list::-webkit-scrollbar-track {
-    background: var(--bg-color);
+    background: transparent;
 }
 
 .file-list::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: var(--border);
     border-radius: 4px;
 }
 
 .file-list::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: var(--bronze);
 }
 
 .file-item {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 2px;
-    margin-bottom: 4px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: var(--transition);
-    border: 1px solid transparent;
-    background-color: #f9fafb;
+    gap: 10px;
+    height: 30px;
+    padding: 0 12px 0 14px;
+    border-bottom: 1px solid var(--hairline);
+    /* hairline 分隔，不逐行铺底色 */
     user-select: none;
 }
 
-.file-item:hover,
-.file-item.selected {
-    background-color: #f0f4f8;
-    border-color: var(--border-color);
+.file-item:last-child {
+    border-bottom: none;
 }
 
+/* 左侧标记条：默认隐藏，hover/选中时滑入 */
+.file-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: var(--bronze);
+    opacity: 0.55;
+    transform: translateX(-100%);
+    transition: transform 0.18s ease;
+}
+
+/* 只有源面板的项可点选 */
+#src-list .file-item {
+    cursor: pointer;
+}
+
+#src-list .file-item:hover::before {
+    transform: translateX(0);
+    /* bronze 浅滑入预示可选 */
+}
+
+#dst-list .file-item {
+    cursor: default;
+}
+
+/* 选中态：赭黄左条 + 暖黄底，而非蓝框蓝影 */
 .file-item.selected {
-    background-color: #dbeafe;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+    background-color: var(--selected-bg);
+}
+
+.file-item.selected::before {
+    background-color: var(--ochre);
+    opacity: 1;
+    transform: translateX(0);
 }
 
 .file-icon {
-    font-size: 20px;
     flex-shrink: 0;
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+}
+
+.file-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.icon-dir {
+    color: var(--bronze);
+}
+
+.icon-file {
+    color: var(--ink);
+    opacity: 0.65;
+}
+
+.parent-dir .file-icon {
+    color: var(--bronze);
 }
 
 .file-name {
     flex: 1;
-    font-size: 14px;
+    min-width: 0;
+    font-size: 13.5px;
     font-weight: 500;
-    color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.file-size {
-    font-size: 12px;
-    color: var(--text-secondary);
-    flex-shrink: 0;
-    background-color: #e5e7eb;
-    padding: 2px 8px;
-    border-radius: 4px;
+.parent-dir .file-name {
+    color: var(--bronze);
 }
 
-/* ===================== 按钮 ===================== */
+.file-size {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11.5px;
+    color: var(--bronze);
+}
+
+/* nlink 徽标：赭黄描边/淡底，等宽字体 */
+.nlink-badge {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1;
+    padding: 3px 5px;
+    color: var(--ink);
+    background-color: rgba(247, 218, 10, 0.22);
+    border: 1px solid var(--ochre);
+    border-radius: 3px;
+}
+
+/* ===================== 7. 按钮 ===================== */
 .btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 6px;
+    padding: 9px 16px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: var(--transition);
     white-space: nowrap;
 }
 
 .btn svg {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
 }
 
-.btn-folder {
-    background-color: #e0e7ef;
-    color: var(--primary-color);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 13px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-    transition: var(--transition);
-    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.07);
+/* 主按钮：深色实底 + 赭黄左滑揭示 */
+.btn-primary {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background-color: var(--ink);
+    color: var(--on-dark);
+    transition: color 0.2s ease;
 }
 
-.btn-folder:hover {
-    background-color: #d1d5db;
-    color: var(--primary-hover);
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-color: var(--ochre);
+    transform: translateX(-101%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    /* hover-out 延迟 0 */
 }
 
+.btn-primary:hover {
+    color: var(--ink);
+}
+
+.btn-primary:hover::before {
+    transform: translateX(0);
+    transition-delay: 0.05s;
+    /* hover-in 延迟 0.05s */
+}
+
+/* 次按钮：暖白底 + 暖边框 */
 .btn-secondary {
-    background-color: #e5e7eb;
-    color: var(--text-primary);
+    background-color: var(--surface);
+    color: var(--ink);
+    border-color: var(--border);
 }
 
 .btn-secondary:hover {
-    background-color: #d1d5db;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: var(--ink);
 }
 
-.btn-secondary:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* ===================== 状态栏 ===================== */
-.status-bar {
-    padding: 15px 30px;
-    background-color: #f3f4f6;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-}
-
-.status-message {
-    font-size: 13px;
-    color: var(--text-secondary);
-    padding-left: 25px;
-    position: relative;
-}
-
-.status-message::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background-color: var(--status-color, var(--success-color));
-}
-
-/* ===================== 动画与加载 ===================== */
-.loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-    padding: 40px 20px;
-    color: var(--text-secondary);
-    font-size: 15px;
-    font-weight: 500;
-    letter-spacing: 0.2px;
-    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid var(--border-color);
-    border-top-color: var(--primary-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* ===================== 空目录与错误 ===================== */
-.empty-directory {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    color: var(--danger-color);
-    font-size: 15px;
-    font-weight: 500;
-    text-align: center;
-    gap: 18px;
-    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-.retry-default-btn {
-    margin-top: 8px;
-    padding: 8px 18px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #fff;
-    background: var(--primary-color);
-    border: none;
-    border-radius: 6px;
+/* 面板头部的新建文件夹小按钮 */
+.btn-folder {
+    padding: 5px 7px;
+    background-color: transparent;
+    color: var(--bronze);
+    border: 1px solid var(--border);
+    border-radius: 4px;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
-    transition: background 0.2s, box-shadow 0.2s;
+    transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.retry-default-btn:hover {
-    background: var(--primary-hover);
-    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.15);
+.btn-folder:hover {
+    color: var(--ink);
+    border-color: var(--ink);
 }
 
-/* ===================== 面板操作区 ===================== */
+/* ===================== 8. 操作区与筛选控件 ===================== */
 .actions {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
     gap: 12px;
-    padding: 16px 30px;
-    border-top: 1px solid var(--border-color);
-    background-color: #f8fafc;
-    box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.03);
     flex-wrap: wrap;
-}
-
-.actions .panel-actions {
-    margin-left: auto;
+    padding: 12px 30px;
+    border-top: 1px solid var(--border);
 }
 
 .actions .buttons {
@@ -389,57 +403,51 @@ header h1 {
     gap: 10px;
 }
 
-.panel-actions {
-    padding: 0;
-    border: none;
-    background: transparent;
+.actions .panel-actions {
+    margin-left: auto;
     display: flex;
+    align-items: center;
     gap: 12px;
     flex-wrap: wrap;
-    align-items: center;
 }
 
-/* ===================== 筛选控件 ===================== */
 .filter-control {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    gap: 9px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background-color: var(--surface);
 }
 
 .filter-control input[type="checkbox"] {
     appearance: none;
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border-color);
-    border-radius: 4px;
-    background-color: #fff;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    background-color: var(--surface);
     display: inline-grid;
     place-items: center;
     cursor: pointer;
-    transition: var(--transition);
-    position: relative;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .filter-control input[type="checkbox"]::after {
     content: '';
-    width: 5px;
-    height: 9px;
-    border: solid #fff;
+    width: 4px;
+    height: 8px;
+    border: solid var(--ochre);
     border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
+    transform: rotate(45deg) translateY(-1px);
     opacity: 0;
-    transition: var(--transition);
+    transition: opacity 0.15s ease;
 }
 
 .filter-control input[type="checkbox"]:checked {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+    background-color: var(--ink);
+    border-color: var(--ink);
 }
 
 .filter-control input[type="checkbox"]:checked::after {
@@ -447,23 +455,123 @@ header h1 {
 }
 
 .filter-control input[type="checkbox"]:focus-visible {
-    outline: 2px solid rgba(37, 99, 235, 0.35);
+    outline: 2px solid var(--ink);
     outline-offset: 2px;
 }
 
 .filter-control label {
-    font-size: 13px;
-    color: var(--text-primary);
+    font-size: 12.5px;
+    color: var(--ink);
     cursor: pointer;
     user-select: none;
 }
 
-/* ===================== 模态框 ===================== */
+/* ===================== 9. 状态栏 ===================== */
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 9px 30px;
+    border-top: 1px solid var(--border);
+    background-color: var(--surface);
+}
+
+.status-message {
+    flex: 1;
+    min-width: 0;
+    font-size: 12.5px;
+    color: var(--ink);
+    padding-left: 18px;
+    position: relative;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-message::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background-color: var(--status-color, var(--bronze));
+}
+
+/* 进度中的文件名：等宽字体 */
+.progress-path {
+    font-family: var(--font-mono);
+    color: var(--bronze);
+}
+
+/* 键盘提示：铜棕小字，移动端隐藏 */
+.kbd-hints {
+    flex-shrink: 0;
+    font-size: 11.5px;
+    color: var(--bronze);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+/* ===================== 10. 加载与空态 ===================== */
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 40px 20px;
+    color: var(--bronze);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid var(--border);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 空目录：中性铜棕，不是错误 */
+.empty-directory {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 48px 20px;
+    color: var(--bronze);
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* 真正加载失败才用 danger 色 */
+.empty-directory.error {
+    color: var(--danger);
+}
+
+.retry-default-btn {
+    margin-top: 4px;
+}
+
+/* ===================== 11. 模态框 ===================== */
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background-color: rgba(17, 24, 39, 0.45);
-    backdrop-filter: blur(2px);
+    background-color: rgba(38, 38, 38, 0.45);
+    /* 无 backdrop blur */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -471,7 +579,7 @@ header h1 {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.25s ease, visibility 0.25s ease;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .modal-overlay.active {
@@ -481,117 +589,107 @@ header h1 {
 }
 
 .modal {
-    background-color: #fff;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(38, 38, 38, 0.06);
+    /* 至多一级浅阴影 */
     width: 92%;
-    max-width: 480px;
+    max-width: 460px;
     overflow: hidden;
-    transform: translateY(8px) scale(0.98);
-    transition: transform 0.25s ease;
+    transform: translateY(6px);
+    transition: transform 0.2s ease;
 }
 
 .modal-overlay.active .modal {
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
 }
 
 .modal-header {
-    padding: 16px 18px;
-    background-color: var(--primary-color);
-    color: #fff;
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: 0.2px;
+    padding: 12px 16px;
+    background-color: var(--ink);
+    /* 暗色标题条 */
+    color: var(--on-dark);
 }
 
 .modal-header h3 {
-    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
 }
 
 .modal-body {
-    padding: 18px;
-    font-size: 14px;
-    color: var(--text-primary);
+    padding: 16px;
+    font-size: 13.5px;
 }
 
 .modal-message {
-    margin: 0 0 8px 0;
-    color: var(--text-secondary);
-    padding: inherit;
+    margin-bottom: 10px;
+    color: var(--ink);
+    word-break: break-all;
 }
 
 .modal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    padding: 14px 18px;
-    border-top: 1px solid var(--border-color);
-    background-color: #f9fafb;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
 }
 
 .modal-actions .btn {
-    padding: 8px 14px;
-    font-size: 13px;
-    border-radius: 6px;
-    transition: var(--transition);
+    padding: 7px 14px;
+    font-size: 12.5px;
 }
 
-.modal-actions .btn-cancel {
-    background-color: #e5e7eb;
-    color: var(--text-primary);
-}
-
-.modal-actions .btn-cancel:hover {
-    background-color: #d1d5db;
-}
-
-.modal-actions .btn-confirm {
-    background-color: var(--primary-color);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.24);
-}
-
-.modal-actions .btn-confirm:hover {
-    background-color: var(--primary-hover);
-}
-
-.modal-actions .btn-confirm:focus-visible {
-    outline: 2px solid rgba(37, 99, 235, 0.35);
-    outline-offset: 2px;
-}
-
-/* ===================== 响应式设计 ===================== */
+/* ===================== 12. 响应式 ===================== */
 @media (max-width: 768px) {
-    .panels-container {
-        flex-direction: column;
-        gap: 15px;
-        padding: 15px;
+    .container {
+        height: auto;
+        min-height: 100vh;
     }
 
     header {
-        padding: 15px 20px;
+        padding: 14px 16px 12px;
     }
 
     header h1 {
-        font-size: 20px;
+        font-size: 18px;
+    }
+
+    .panels-container {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px 16px;
+        overflow: visible;
+    }
+
+    /* 堆叠时给每个面板明确高度，防止 file-list 塌陷为 0 */
+    .panel {
+        flex: none;
+        height: 42vh;
     }
 
     .actions {
-        gap: 10px 12px;
-        padding: 12px 15px;
+        padding: 10px 16px;
     }
 
     .actions .buttons {
         width: 100%;
-        justify-content: flex-start;
     }
 
     .actions .panel-actions {
         margin-left: 0;
         width: 100%;
-        justify-content: flex-end;
+        justify-content: flex-start;
     }
 
-    .btn {
-        justify-content: center;
+    .status-bar {
+        padding: 8px 16px;
+    }
+
+    .kbd-hints {
+        display: none;
     }
 }
