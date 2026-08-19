@@ -7,8 +7,5 @@ dependencies = [
     "fastapi[standard]>=0.115.0",
 ]
 
-[project.scripts]
-hlink-tool = ""
-
 [tool.uv]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"

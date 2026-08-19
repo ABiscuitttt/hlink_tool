@@ -5,9 +5,11 @@
 ## 功能
 
 - 双面板文件浏览（源目录 / 目标目录）
-- WebSocket 实时创建硬链接
+- WebSocket 实时创建硬链接（结构化 JSON 进度帧 + 完成统计）
+- 文件硬链接数（nlink）徽标显示
 - 中文界面
-- 通过 `ALLOWED_ROOTS` 环境变量限制可浏览的根目录（逗号分隔）
+- 通过 `ALLOWED_ROOTS` 环境变量限制可浏览的根目录（逗号分隔，REST 与 WebSocket 均生效）
+- 通过 `ALLOWED_ORIGINS` 环境变量配置 CORS 允许来源（逗号分隔，默认 `*`）
 - Docker 一键部署（Nginx + FastAPI）
 
 ## 技术栈
