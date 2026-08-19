@@ -137,9 +137,7 @@ async function createNewFolder(currentPath, folderName, type) {
         }
 
         updateStatus('文件夹创建成功', 'success');
-        const listElement = type === 'src' ? srcList : dstList;
-        const isFilterEnabled = type === 'src' && filterCheckbox.checked;
-        await loadAndRenderFileList(currentPath, listElement, isFilterEnabled);
+        await loadPanel(currentPath, type);
     } catch (error) {
         updateStatus(`新建文件夹失败: ${error.message}`, 'error');
     }
@@ -207,16 +205,9 @@ function handleLinkConfirm() {
     };
 }
 
-/** 解析服务端 JSON 帧并分发 */
+/** 解析服务端 JSON 帧并分发（服务端只发结构化 JSON） */
 function handleWsMessage(evt, result) {
-    let msg;
-    try {
-        msg = JSON.parse(evt.data);
-    } catch {
-        updateStatus(String(evt.data), 'loading');
-        return;
-    }
-
+    const msg = JSON.parse(evt.data);
     switch (msg.type) {
         case 'progress':
             showWsProgress(msg);
@@ -236,14 +227,12 @@ function handleWsMessage(evt, result) {
             result.failed = msg.failed ?? 0;
             result.skipped = msg.skipped ?? 0;
             break;
-        default:
-            if (msg.message) updateStatus(msg.message, 'loading');
     }
 }
 
 /** 进度帧：正在处理 (i/n)，目录时附带文件夹内进度；文件名等宽、截断 */
 function showWsProgress(msg) {
-    const name = msg.source ? String(msg.source).split('/').filter(Boolean).pop() || msg.source : '';
+    const name = msg.source ? String(msg.source).split('/').pop() : '';
     let head = `正在处理 (${msg.index}/${msg.total})`;
     if (msg.file_total != null) {
         head += ` 文件夹内 ${msg.current}/${msg.file_total}`;
@@ -274,7 +263,7 @@ function truncateMiddle(text, maxLen) {
 function setupRefreshButton() {
     document.getElementById('refresh-btn').addEventListener('click', async () => {
         updateStatus('刷新中', 'loading');
-        appState.dirSizeCache.clear(); // 清目录大小缓存
+        appState.dirSizeCache.clear();
         await Promise.all([
             loadAndRenderFileList(appState.srcPath, srcList, filterCheckbox.checked),
             loadAndRenderFileList(appState.dstPath, dstList, false)
@@ -296,9 +285,7 @@ function setupPathInputs() {
             const type = el.dataset.type;
             if (e.key === 'Enter') {
                 e.preventDefault();
-                const newPath = el.value.trim() || '/';
-                const isFilterEnabled = type === 'src' && filterCheckbox.checked;
-                loadAndRenderFileList(newPath, type === 'src' ? srcList : dstList, isFilterEnabled);
+                loadPanel(el.value.trim() || '/', type);
             } else if (e.key === 'Escape') {
                 e.stopPropagation(); // 输入框自己的 Esc：还原路径，不触发全局清除选择
                 el.value = type === 'src' ? appState.srcPath : appState.dstPath;
@@ -351,6 +338,13 @@ function setupKeyboardShortcuts() {
 /* =====================================================================
  * 文件列表加载与渲染
  * ===================================================================== */
+/** 按面板类型加载目录（源面板跟随筛选开关） */
+function loadPanel(path, type) {
+    return loadAndRenderFileList(
+        path, type === 'src' ? srcList : dstList, type === 'src' && filterCheckbox.checked
+    );
+}
+
 async function loadAndRenderFileList(path, listElement, filterSingleLink = false) {
     const type = listElement.id === 'src-list' ? 'src' : 'dst';
     updateStatus('正在加载文件列表...', 'loading');
@@ -409,13 +403,11 @@ function createFileItem(item, type, listElement) {
     el.dataset.path = item.path;
     if (item.isParent) el.classList.add('parent-dir');
 
-    // 图标
     const icon = document.createElement('span');
     icon.className = item.type === 'directory' ? 'file-icon icon-dir' : 'file-icon icon-file';
     icon.innerHTML = item.isParent ? ICONS.back : (item.type === 'directory' ? ICONS.folder : ICONS.file);
     el.appendChild(icon);
 
-    // 文件名
     const name = document.createElement('span');
     name.className = 'file-name';
     name.textContent = item.name;
@@ -453,7 +445,6 @@ function createFileItem(item, type, listElement) {
         el.addEventListener('click', () => selectFile(item, el));
     }
 
-    // 双击进入目录
     el.addEventListener('dblclick', () => {
         if (item.type === 'directory') enterDirectory(item, listElement);
     });
@@ -463,9 +454,7 @@ function createFileItem(item, type, listElement) {
 
 function enterDirectory(item, listElement) {
     updateStatus(`正在进入目录: ${item.name}`, 'loading');
-    const type = listElement.id === 'src-list' ? 'src' : 'dst';
-    const isFilterEnabled = type === 'src' && filterCheckbox.checked;
-    loadAndRenderFileList(item.path, listElement, isFilterEnabled);
+    loadPanel(item.path, listElement.id === 'src-list' ? 'src' : 'dst');
 }
 
 /** 异步统计目录大小（带缓存；不含 ".."，因其不渲染 .dir-size） */
@@ -576,8 +565,7 @@ async function retryDefaultDirectory(type) {
         updateStatus('正在返回默认目录...', 'loading');
         const dir = await fetchDefaultDir();
         document.getElementById(`${type}-path`).value = dir;
-        const isFilterEnabled = type === 'src' && filterCheckbox.checked;
-        await loadAndRenderFileList(dir, type === 'src' ? srcList : dstList, isFilterEnabled);
+        await loadPanel(dir, type);
     } catch (error) {
         updateStatus(`返回默认目录失败: ${error.message}`, 'error');
     }
@@ -599,6 +587,6 @@ function setStatusColor(type) {
 }
 
 function updateStatus(message, type = 'info') {
-    statusMessage.textContent = String(message).replace(/<br\s*\/?>/gi, ' | ');
+    statusMessage.textContent = String(message);
     setStatusColor(type);
 }
