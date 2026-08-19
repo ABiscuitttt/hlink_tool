@@ -155,7 +155,6 @@ header h1 {
     transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* 修复：两个选择器都必须带 :focus */
 .folder-input:focus,
 .path-display-input:focus {
     background-color: var(--focus-bg);
@@ -178,10 +177,6 @@ header h1 {
 
 .file-list::-webkit-scrollbar {
     width: 8px;
-}
-
-.file-list::-webkit-scrollbar-track {
-    background: transparent;
 }
 
 .file-list::-webkit-scrollbar-thumb {
@@ -233,10 +228,6 @@ header h1 {
     /* bronze 浅滑入预示可选 */
 }
 
-#dst-list .file-item {
-    cursor: default;
-}
-
 /* 选中态：赭黄左条 + 暖黄底，而非蓝框蓝影 */
 .file-item.selected {
     background-color: var(--selected-bg);
@@ -267,10 +258,6 @@ header h1 {
 .icon-file {
     color: var(--ink);
     opacity: 0.65;
-}
-
-.parent-dir .file-icon {
-    color: var(--bronze);
 }
 
 .file-name {
@@ -516,16 +503,26 @@ header h1 {
 }
 
 /* ===================== 10. 加载与空态 ===================== */
-.loading {
+.loading,
+.empty-directory {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 14px;
-    padding: 40px 20px;
     color: var(--bronze);
     font-size: 14px;
     font-weight: 500;
+}
+
+.loading {
+    padding: 40px 20px;
+}
+
+/* 空目录：中性铜棕，不是错误 */
+.empty-directory {
+    padding: 48px 20px;
+    text-align: center;
 }
 
 .spinner {
@@ -541,20 +538,6 @@ header h1 {
     to {
         transform: rotate(360deg);
     }
-}
-
-/* 空目录：中性铜棕，不是错误 */
-.empty-directory {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    padding: 48px 20px;
-    color: var(--bronze);
-    font-size: 14px;
-    font-weight: 500;
-    text-align: center;
 }
 
 /* 真正加载失败才用 danger 色 */
