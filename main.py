@@ -65,6 +65,15 @@ def _check_path(path: Path) -> Path:
     return resolved
 
 
+def _check_dir(path: Path) -> Path:
+    """_check_path 基础上再校验路径是目录，否则 400。"""
+    resolved = _check_path(path)
+    if not resolved.is_dir():
+        logger.warning("请求的路径不是目录: %s", resolved)
+        raise HTTPException(status_code=400, detail=f"请求的路径不是目录: {resolved}")
+    return resolved
+
+
 class CreateDirRequest(BaseModel):
     """创建文件夹请求体。"""
 
@@ -75,25 +84,18 @@ class CreateDirRequest(BaseModel):
 @app.get("/list_dir")
 def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
     """列出目录内容，目录在前、文件在后，名称排序大小写不敏感。"""
-    path = _check_path(path)
-    if not path.is_dir():
-        logger.warning("请求的路径不是目录: %s", path)
-        raise HTTPException(status_code=400, detail=f"请求的路径不是目录: {path}")
+    path = _check_dir(path)
 
     results = []
     for item in path.iterdir():
         try:
-            stat_info = item.stat(follow_symlinks=False)  # 缓存文件的元信息
-            if filter_single_link:
-                condition = (
-                    False
-                    or (item.is_file() and stat_info.st_nlink == 1)
-                    or (item.is_dir() and contains_single_link_file(item))
-                )
-                if condition:
-                    results.append(file_info(item, stat_info))
-            else:
-                results.append(file_info(item, stat_info))
+            stat_info = item.stat(follow_symlinks=False)
+            if filter_single_link and not (
+                (item.is_file() and stat_info.st_nlink == 1)
+                or (item.is_dir() and contains_single_link_file(item))
+            ):
+                continue
+            results.append(file_info(item, stat_info))
         except Exception as e:
             logger.error("处理项目 %s 时出错: %s", item, e)
 
@@ -115,15 +117,11 @@ def list_directory(path: Path, filter_single_link: bool = False) -> list[dict]:
 @app.get("/dir_size")
 def directory_size(path: Path) -> str:
     """统计目录总大小（跳过符号链接），整体异常时返回 "未知"。"""
-    path = _check_path(path)
-    if not path.is_dir():
-        logger.warning("请求的路径不是目录: %s", path)
-        raise HTTPException(status_code=400, detail=f"请求的路径不是目录: {path}")
+    path = _check_dir(path)
 
     total_size = 0
     try:
         for item in path.rglob("*"):
-            # 只统计常规文件，跳过符号链接和目录
             if item.is_file() and not item.is_symlink():
                 try:
                     total_size += item.stat().st_size
@@ -142,7 +140,6 @@ def create_dir(req: CreateDirRequest) -> dict:
     path = _check_path(req.path)
     new_folder_path = path / req.name
 
-    # 检查名字是否合法
     if any(char in req.name for char in r'\/:*?"<>|'):
         raise HTTPException(status_code=400, detail="文件夹名称包含非法字符")
 
@@ -181,6 +178,16 @@ async def _ws_send_error_and_close(websocket: WebSocket, message: str) -> None:
         logger.debug("发送错误消息或关闭连接失败，客户端可能已断开")
 
 
+async def _ws_send_skip(
+    websocket: WebSocket, stats: dict, message: str, source: Path
+) -> None:
+    """累计 skipped 计数并发送 skip 帧。"""
+    stats["skipped"] += 1
+    await websocket.send_json(
+        {"type": "skip", "message": message, "source": source.as_posix()}
+    )
+
+
 @app.websocket("/ws/link_files")
 async def websocket_progress(websocket: WebSocket) -> None:
     """通过 WebSocket 执行硬链接任务，持续发送结构化 JSON 帧。
@@ -193,7 +200,6 @@ async def websocket_progress(websocket: WebSocket) -> None:
     try:
         data = await websocket.receive_json()
 
-        # 校验首条消息：必须含 link: true，且带合法的 src_files 与 dst_path
         src_files_raw = data.get("src_files")
         dst_path_raw = data.get("dst_path")
         if (
@@ -235,32 +241,19 @@ async def websocket_progress(websocket: WebSocket) -> None:
         stats = {"linked": 0, "failed": 0, "skipped": 0}
 
         for index, src_path in enumerate(src_files, start=1):
-            # 校验存在性（在线程池中执行，避免阻塞事件循环）
+            # 文件系统操作均在线程池中执行，避免阻塞事件循环
             if not await asyncio.to_thread(src_path.exists):
-                stats["skipped"] += 1
-                await websocket.send_json(
-                    {
-                        "type": "skip",
-                        "message": f"源文件 {src_path} 不存在，已跳过",
-                        "source": src_path.as_posix(),
-                    }
+                await _ws_send_skip(
+                    websocket, stats, f"源文件 {src_path} 不存在，已跳过", src_path
                 )
                 continue
 
             if await asyncio.to_thread(src_path.is_file):
-                # 单个文件链接
                 dst_file = dst_path / src_path.name
                 # 防御：目标即源文件本身（目标目录就是源所在目录），
                 # 若继续会先 unlink 源再 link，导致源文件永久丢失
                 if dst_file == src_path:
-                    stats["skipped"] += 1
-                    await websocket.send_json(
-                        {
-                            "type": "skip",
-                            "message": "源与目标相同，跳过",
-                            "source": src_path.as_posix(),
-                        }
-                    )
+                    await _ws_send_skip(websocket, stats, "源与目标相同，跳过", src_path)
                     continue
                 try:
                     if await asyncio.to_thread(dst_file.exists):
@@ -290,13 +283,11 @@ async def websocket_progress(websocket: WebSocket) -> None:
             else:
                 # 目录链接：防御自嵌套（dst 位于 src 内部时跳过）
                 if dst_path.resolve().is_relative_to(src_path.resolve()):
-                    stats["skipped"] += 1
-                    await websocket.send_json(
-                        {
-                            "type": "skip",
-                            "message": f"目标路径位于源目录 {src_path} 内部，已跳过以避免自嵌套",
-                            "source": src_path.as_posix(),
-                        }
+                    await _ws_send_skip(
+                        websocket,
+                        stats,
+                        f"目标路径位于源目录 {src_path} 内部，已跳过以避免自嵌套",
+                        src_path,
                     )
                     continue
 
@@ -317,7 +308,6 @@ async def websocket_progress(websocket: WebSocket) -> None:
                         stats["skipped"] += 1
                     await websocket.send_json(frame)
 
-        # done 为最后一条消息，随后关闭连接
         await websocket.send_json({"type": "done", **stats})
         await websocket.close()
 
@@ -435,36 +425,24 @@ def file_info(item: Path, stat_info: os.stat_result | None = None) -> dict:
 
 
 def format_file_size(bytes_num: float, decimal_places: int = 2) -> str:
-    """
-    将字节数转换为可读性好的文件大小字符串
-
-    参数:
-    bytes_num (int): 字节数
-    decimal_places (int): 保留的小数位数，默认为2
-
-    返回:
-    str: 格式化的文件大小字符串
-    """
+    """将字节数格式化为带单位的可读字符串，如 "1.50 MB"。"""
     size_units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
 
-    # 处理字节数为0的情况
     if bytes_num <= 0:
         return "0 B"
 
-    # 找到合适的单位
     i = 0
     while bytes_num >= 1024 and i < len(size_units) - 1:
         bytes_num /= 1024.0
         i += 1
 
-    # 格式化输出
     return f"{bytes_num:.{decimal_places}f} {size_units[i]}"
 
 
 def contains_single_link_file(path: Path) -> bool:
     """递归检查目录中是否存在硬链接数为 1 的文件。"""
     try:
-        for item in path.rglob("*"):  # 递归遍历所有文件和目录
+        for item in path.rglob("*"):
             if item.is_file() and item.stat().st_nlink == 1:
                 return True
     except Exception as e:
